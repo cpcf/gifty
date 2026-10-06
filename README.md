@@ -36,6 +36,12 @@ go build -o gifty .
 | `GIFTY_ADDR` | `127.0.0.1:8080` | Listening address |
 | `GIFTY_DATA` | `data/gifty.json` | Persistent data file |
 | `GIFTY_SECURE_COOKIES` | `false` | Set to `true` behind HTTPS |
+| `GIFTY_SMTP_HOST` | unset | SMTP server; email is off when unset. `log` prints emails to the log instead |
+| `GIFTY_SMTP_PORT` | `587` | SMTP port; the server must offer STARTTLS |
+| `GIFTY_SMTP_USER`, `GIFTY_SMTP_PASSWORD` | unset | SMTP credentials |
+| `GIFTY_MAIL_FROM` | unset | Sender, e.g. `Gifty <noreply@gifty.example.com>` |
+| `GIFTY_BASE_URL` | unset | Public address used in email links, e.g. `https://gifty.example.com` |
+| `GIFTY_ACCESS_CODE` | unset | When set, new accounts need this code or an open invitation link; existing accounts can always sign in |
 
 Run one server process per data file. Data is protected by a process mutex and written with a synced temporary file and atomic rename. Failed saves roll back memory. Keep the data file on a persistent local volume and back it up securely. It contains account details, password hashes, wish lists and assignments. It must never be served as a static asset. Horizontal scaling needs a shared transactional database first.
 
@@ -43,7 +49,7 @@ For other people to use invitations, deploy the binary behind an HTTPS reverse p
 
 Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Session tokens are random and stored as SHA-256 digests. Cookies are HttpOnly and SameSite=Lax. The server checks write origins, limits authentication attempts, bounds request bodies, escapes rendered user content and sends a restrictive content security policy. The authentication limiter uses the connection IP; a reverse proxy shares that limit unless deployed with suitable edge rate limiting and a trusted client-IP design.
 
-Email addresses identify accounts; this version does not send emails, verify email ownership or provide password recovery. Invitations are shared manually. Exchange exclusions, scheduled reminders and gift reservations are outside this version. The administrator can read stored assignments; privacy is enforced between app users, not against the server operator.
+Email addresses identify accounts. With email on, Gifty sends a confirmation link at signup, password-reset links, a notice when names are drawn and reminders before the exchange. Reminders are any number of days, weeks or calendar months before the date (up to 8). The organiser sets each exchange’s default (a week and the day before unless changed); each person can set their own for every exchange on their account page or for one exchange on its page, and ticking “I’ve got my gift” stops reminders for that exchange. Wish-list ideas can be shown in every exchange or only in chosen ones; givers only see ideas meant for their exchange. Exchange emails go only to confirmed addresses, never name a recipient and carry a one-click unsubscribe link. Messages are queued in the data file in the same save as the change that caused them, sent in the background and retried with backoff. Try it locally with `GIFTY_SMTP_HOST=log go run .`. Invitations are still shared manually. Exchange exclusions and gift reservations are outside this version. The administrator can read stored assignments; privacy is enforced between app users, not against the server operator.
 
 ## Verify
 
@@ -57,7 +63,7 @@ Tests cover access control, draws over 3–100 participants, invitation lifecycl
 
 ## Design
 
-[PRODUCT.md](PRODUCT.md) records product decisions. [DESIGN.md](DESIGN.md) documents the implemented interface, guided by [Impeccable](https://github.com/pbakaus/impeccable). No third-party fonts, trackers, raster images or production JavaScript dependencies are loaded.
+[PRODUCT.md](PRODUCT.md) records product decisions. [DESIGN.md](DESIGN.md) documents the implemented interface, guided by [Impeccable](https://github.com/pbakaus/impeccable). The interface uses Public Sans (SIL Open Font License, `web/public-sans-OFL.txt`), served from the binary. No external requests, trackers, raster images or production JavaScript dependencies are loaded.
 
 The optional browser test uses Playwright and axe-core, separate from the Go app:
 

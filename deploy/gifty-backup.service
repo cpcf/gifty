@@ -1,0 +1,8 @@
+[Unit]
+Description=Copy the Gifty data file to a dated backup
+
+[Service]
+Type=oneshot
+User=gifty
+# Gifty replaces its data file by atomic rename, so a copy is always a complete file.
+ExecStart=/bin/sh -c 'cp /var/lib/gifty/gifty.json /var/lib/gifty/backups/gifty-$(date +%%F).json && find /var/lib/gifty/backups -name "gifty-*.json" -mtime +14 -delete'

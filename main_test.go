@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type client struct {
@@ -161,6 +163,27 @@ func TestAuthAndValidation(t *testing.T) {
 	if w.Header().Get("Content-Security-Policy") == "" {
 		t.Fatal("missing CSP")
 	}
+	r = httptest.NewRequest("GET", "/style.css", nil)
+	w = httptest.NewRecorder()
+	a.handler().ServeHTTP(w, r)
+	etag := w.Header().Get("ETag")
+	if w.Code != 200 || etag == "" || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/css") {
+		t.Fatal("stylesheet not served with a validator")
+	}
+	r = httptest.NewRequest("GET", "/style.css", nil)
+	r.Header.Set("If-None-Match", etag)
+	w = httptest.NewRecorder()
+	a.handler().ServeHTTP(w, r)
+	if w.Code != 304 {
+		t.Fatalf("revalidation returned %d", w.Code)
+	}
+	for _, path := range []string{"/index.html", "/missing.js"} {
+		w = httptest.NewRecorder()
+		a.handler().ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 404 {
+			t.Fatalf("%s returned %d", path, w.Code)
+		}
+	}
 }
 func TestMembershipAndInviteRotation(t *testing.T) {
 	a := setup(t)
@@ -213,5 +236,158 @@ func TestFailedSaveRollsBack(t *testing.T) {
 	v := c.req("GET", "me", nil, 200)
 	if len(v["wishes"].([]any)) != 0 {
 		t.Fatal("failed transaction changed memory")
+	}
+}
+func TestClientIPBehindProxy(t *testing.T) {
+	a := setup(t)
+	r := httptest.NewRequest("POST", "/api/login", nil)
+	r.RemoteAddr = "127.0.0.1:5000"
+	r.Header.Set("X-Forwarded-For", "10.0.0.1, 203.0.113.9")
+	if got := a.clientIP(r); got != "127.0.0.1" {
+		t.Fatalf("trusted the header without GIFTY_TRUST_PROXY: %s", got)
+	}
+	a.trustProxy = true
+	if got := a.clientIP(r); got != "203.0.113.9" {
+		t.Fatalf("got %s, want the address the proxy appended", got)
+	}
+	r.RemoteAddr = "198.51.100.7:5000"
+	if got := a.clientIP(r); got != "198.51.100.7" {
+		t.Fatalf("trusted the header from a remote client: %s", got)
+	}
+	r.RemoteAddr, r.Header["X-Forwarded-For"] = "127.0.0.1:5000", []string{"not-an-ip"}
+	if got := a.clientIP(r); got != "127.0.0.1" {
+		t.Fatalf("accepted a malformed header: %s", got)
+	}
+}
+func TestWishesScopedToExchanges(t *testing.T) {
+	a := setup(t)
+	cs := map[string]*client{}
+	for _, n := range []string{"ana", "ben", "cat"} {
+		cs[n] = &client{t: t, a: a}
+		cs[n].signup(n)
+	}
+	mk := func(name string) string {
+		e := cs["ana"].req("POST", "exchanges", map[string]string{"Name": name, "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)
+		for _, n := range []string{"ben", "cat"} {
+			cs[n].req("POST", "join", map[string]string{"Code": e["invite"].(string)}, 200)
+		}
+		return e["id"].(string)
+	}
+	work, family := mk("Work"), mk("Family")
+	other := cs["cat"].req("POST", "exchanges", map[string]string{"Name": "Cat's", "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)["id"].(string)
+	cs["ben"].req("POST", "wishes", map[string]any{"Title": "Not in that exchange", "Exchanges": []string{other}}, 400)
+	cs["ben"].req("POST", "wishes", map[string]any{"Title": "Anything", "Exchanges": []string{}}, 200)
+	cs["ben"].req("POST", "wishes", map[string]any{"Title": "Mug", "Exchanges": []string{work, work}}, 200)
+	me := cs["ben"].req("POST", "wishes", map[string]any{"Title": "Scarf", "Exchanges": []string{family}}, 200)
+	if got := me["wishes"].([]any)[1].(map[string]any)["exchanges"].([]any); len(got) != 1 {
+		t.Fatalf("duplicate exchange kept: %v", got)
+	}
+	ben := a.byToken(func(u *User) bool { return u.Email == "ben@example.com" }).ID
+	titles := func(ex string) []string {
+		var out []string
+		for _, w := range wishesFor(a.state.Users[ben], a.state.Exchanges[ex]) {
+			out = append(out, w.Title)
+			if w.Exchanges != nil {
+				t.Fatal("recipient view reveals the giver's other exchanges")
+			}
+		}
+		return out
+	}
+	if got := titles(work); !slices.Equal(got, []string{"Anything", "Mug"}) {
+		t.Fatalf("work sees %v", got)
+	}
+	if got := titles(family); !slices.Equal(got, []string{"Anything", "Scarf"}) {
+		t.Fatalf("family sees %v", got)
+	}
+	// The draw view uses the same filter.
+	cs["ana"].req("POST", "exchanges/"+family+"/draw", nil, 200)
+	for _, n := range []string{"ana", "cat"} {
+		r := cs[n].req("GET", "exchanges/"+family, nil, 200)["recipient"].(map[string]any)
+		if r["name"] == "ben" {
+			for _, w := range r["wishes"].([]any) {
+				if w.(map[string]any)["title"] == "Mug" {
+					t.Fatal("work-only idea shown in the family exchange")
+				}
+			}
+		}
+	}
+}
+func TestAccessGate(t *testing.T) {
+	a := setup(t)
+	a.access = digest("gifty-access:" + "open sesame")
+	c := &client{t: t, a: a}
+	cfg := c.req("GET", "config", nil, 200)
+	if cfg["gated"] != true || cfg["access"] != false {
+		t.Fatalf("config %v", cfg)
+	}
+	signup := map[string]string{"Name": "ana", "Email": "ana@example.com", "Password": "correct horse battery staple"}
+	c.req("POST", "signup", signup, 403)
+	c.req("POST", "access", map[string]string{"Code": "wrong"}, 403)
+	c.req("POST", "access", map[string]string{"Code": " open sesame "}, 200)
+	if c.cookie.Name != "gifty_access" || strings.Contains(c.cookie.Value, "sesame") || !c.cookie.HttpOnly {
+		t.Fatalf("access cookie %+v", c.cookie)
+	}
+	if c.req("GET", "config", nil, 200)["access"] != true {
+		t.Fatal("access not remembered")
+	}
+	c.req("POST", "signup", signup, 200)
+	e := c.req("POST", "exchanges", map[string]string{"Name": "Swap", "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)
+	// An open invitation lets someone sign up without the code; a closed or made-up one doesn't.
+	b := &client{t: t, a: a}
+	b.req("POST", "signup", map[string]string{"Name": "ben", "Email": "ben@example.com", "Password": "correct horse battery staple", "Invite": "made-up"}, 403)
+	b.req("POST", "signup", map[string]string{"Name": "ben", "Email": "ben@example.com", "Password": "correct horse battery staple", "Invite": e["invite"].(string)}, 200)
+	// Existing accounts can always sign in.
+	(&client{t: t, a: a}).req("POST", "login", map[string]string{"Email": "ana@example.com", "Password": "correct horse battery staple"}, 200)
+}
+func TestHashingDoesNotHoldTheLock(t *testing.T) {
+	a := setup(t)
+	(&client{t: t, a: a}).signup("ana")
+	done := make(chan bool)
+	go func() {
+		(&client{t: t, a: a}).req("POST", "login", map[string]string{"Email": "ana@example.com", "Password": "correct horse battery staple"}, 200)
+		done <- true
+	}()
+	// While a login is hashing, other requests must still get the lock straight away.
+	time.Sleep(20 * time.Millisecond)
+	start := time.Now()
+	(&client{t: t, a: a}).req("GET", "config", nil, 200)
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Fatalf("a request waited %v behind password hashing", d)
+	}
+	<-done
+}
+func TestAbuseLimits(t *testing.T) {
+	a := setup(t)
+	o := &outbox{}
+	a.mailer, a.base, a.from = o.send, "https://gifty.example", "Gifty <noreply@gifty.example>"
+	c := &client{t: t, a: a}
+	c.signup("ana")
+	u := a.byToken(func(u *User) bool { return u.Email == "ana@example.com" })
+	// Resending a confirmation every minute stops after 5 account emails in a day.
+	for i := 0; i < 4; i++ {
+		u.LastMail = time.Time{}
+		c.req("POST", "verify/resend", nil, 200)
+	}
+	u.LastMail = time.Time{}
+	c.req("POST", "verify/resend", nil, 429)
+	if len(a.state.Outbox) != 5 {
+		t.Fatalf("queued %d account emails, want 5", len(a.state.Outbox))
+	}
+	before := len(a.state.Outbox)
+	u.ResetExpires = time.Time{}
+	(&client{t: t, a: a}).req("POST", "reset/request", map[string]string{"Email": "ana@example.com"}, 200)
+	if len(a.state.Outbox) != before {
+		t.Fatal("reset email sent past the daily limit")
+	}
+	for i := 0; i < 20; i++ {
+		c.req("POST", "exchanges", map[string]string{"Name": fmt.Sprint("Swap ", i), "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)
+	}
+	c.req("POST", "exchanges", map[string]string{"Name": "One too many", "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 400)
+	// The limiter tracks a bounded number of addresses.
+	for i := len(a.limits); i < 10000; i++ {
+		a.limits[fmt.Sprint("10.0.", i)] = limiter{1, time.Now().Add(time.Hour)}
+	}
+	if a.allow("203.0.113.1") {
+		t.Fatal("limiter grew past its cap")
 	}
 }

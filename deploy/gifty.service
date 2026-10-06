@@ -1,0 +1,22 @@
+[Unit]
+Description=Gifty gift exchanges
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gifty
+Group=gifty
+# Secrets and email settings live in /etc/gifty/env, outside the repository.
+EnvironmentFile=/etc/gifty/env
+Environment=GIFTY_DATA=/var/lib/gifty/gifty.json GIFTY_ADDR=127.0.0.1:8080 GIFTY_SECURE_COOKIES=true GIFTY_TRUST_PROXY=true
+ExecStart=/opt/gifty/gifty
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/gifty
+
+[Install]
+WantedBy=multi-user.target
