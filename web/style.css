@@ -71,13 +71,17 @@ input[readonly]{background:var(--ground)}
 .check{display:flex;gap:12px;align-items:flex-start;font-weight:400;font-size:16px;min-height:44px;cursor:pointer}
 .check input{width:20px;height:20px;min-height:20px;flex-shrink:0;margin:2px 0 0;padding:0}
 .check .hint{display:block}
+/* "Mark gift as ready": a torn-edge strip across the ticket's bottom half. Open is a dashed outline, ready is filled ink. */
+.ready-toggle{width:100%;background:transparent;color:var(--ink);border:2px dashed var(--ink)}
+.ready-toggle:hover{background:var(--sheet)}
+.ready-toggle.on{background:var(--ink);color:var(--on-ink);border-style:solid}
+.ready-toggle.on:hover{background:var(--ink-hover)}
 .show-pw{min-height:36px;align-items:center;margin-top:2px;font-size:14px;gap:8px}
 .show-pw input{width:18px;height:18px;min-height:18px;margin:0}
 .choices{border:0;padding:0;margin:0 0 12px}
 .choices legend{font-weight:600;padding:0;margin-bottom:2px}
 .choices .check{align-items:center}
 .choices .check input{margin:0}
-.to-ready{margin:8px 0 -8px}
 #reminders .quiet{padding-left:0}
 .check input[type=radio]{border-radius:50%}
 .nested{margin:4px 0 4px 0}
@@ -264,7 +268,6 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .fold .name{display:block;font-size:40px;font-weight:800;line-height:1.05;letter-spacing:-.02em;overflow-wrap:anywhere;min-height:42px}
 .fold .name.long{font-size:28px}
 .fold .name.cover{width:78%;height:40px;min-height:0;margin-top:2px;border-radius:2px;background:var(--ink)}
-.half.bottom .to-ready{margin:0}
 .hold{margin-top:14px;max-width:460px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 .hero-art .tickets{margin-bottom:6px}
 .hero-art p{font-size:14px;margin:10px 0 0}

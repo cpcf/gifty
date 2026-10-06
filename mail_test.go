@@ -309,7 +309,7 @@ func TestReminders(t *testing.T) {
 		}
 	}
 
-	// Ticking "I've got my gift" stops reminders; going back to the default picks it up again.
+	// Marking your gift as ready stops reminders; going back to the default picks it up again.
 	e2 := cs["ana"].req("POST", "exchanges", map[string]string{"Name": "Late", "Date": future(3), "Budget": "20", "Currency": "GBP"}, 200)
 	ex2 := a.state.Exchanges[e2["id"].(string)]
 	ex2.Members = slices.Clone(ex.Members)

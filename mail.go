@@ -239,7 +239,7 @@ func (a *App) remind(now time.Time) bool {
 				continue
 			}
 			changed = true
-			a.queue(a.state.Users[id], true, fmt.Sprintf("Reminder: %s is %s", e.Name, when), fmt.Sprintf("%s is %s, on %s.\n\nSpending limit: %s\n\nSign in to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nIs their gift already ready? Tick “I’ve got their gift ready” on the exchange page to stop these reminders. You can also change when you get reminders there.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID))
+			a.queue(a.state.Users[id], true, fmt.Sprintf("Reminder: %s is %s", e.Name, when), fmt.Sprintf("%s is %s, on %s.\n\nSpending limit: %s\n\nSign in to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nIs their gift already ready? Press “Mark gift as ready” on the exchange page to stop these reminders. You can also change when you get reminders there.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID))
 		}
 	}
 	return changed
