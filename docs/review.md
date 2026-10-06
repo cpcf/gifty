@@ -1,30 +1,74 @@
-# Completion review
+# Review
 
-Reviewed 6 October 2026 against the user's requested working Go web app, account signup, Secret Santa management, gift suggestions, Impeccable guidance, plain copy and conventional progress commits.
+Last reviewed 6 October 2026, after the redesign, email, reminders, scoped wish lists, access gate and deployment.
 
-## Evidence
+## Automated checks
 
-- `go test -race ./...`: passed. Lifecycle tests use four independent accounts, enforce organiser-only actions, hide exchanges from outsiders, lock membership after drawing, persist assignments and sessions across reload, and invalidate logout sessions.
-- `go test -cover ./...`: passed, 78.6% statement coverage. Draw property checks cover 3–100 people with 20 independent draws at each size. Every draw has one recipient per giver, exactly one giver per recipient and no self-assignment.
-- `go vet ./...`: passed.
-- `node --check web/app.js` and `node --check tests/browser.cjs`: passed.
-- Built the standalone binary and served its embedded assets successfully.
-- `tests/browser.cjs`: passed in installed Chrome. Real browser accounts completed signup, invitation onboarding, joining, three-person draw, recipient wish lists, creating/editing/removing suggestions, logout and sign-in. No uncaught browser errors.
-- axe-core WCAG 2 A/AA and 2.1 AA checks found no violations on sampled home, exchange, drawn exchange, wish list, gift dialog and narrow dashboard states. This is automated evidence, not a claim of exhaustive assistive-technology certification.
-- Screenshots inspected at 1440px desktop and 390/375px mobile. Browser assertions also verified no horizontal overflow at 320px. Screenshots are generated in the configurable test output directory, not shipped in the app.
+All of these passed on the reviewed code:
 
-## Review changes
+- `go test -race ./...` with 79.3% statement coverage (`go test -cover ./...`) and `go vet ./...`. Tests cover:
+  - access control and privacy between members and outsiders
+  - draws over 3–100 people
+  - invitations, membership locking, persistence and save rollback
+  - wish scoping per exchange, including that givers never learn which other exchanges an idea is in
+  - email confirmation, password reset, the outbox and its retries, one-click unsubscribe and header injection
+  - reminder schedules, overrides, "I've got my gift" and skipping late reminders
+  - the access gate
+  - password hashing outside the state lock
+  - abuse limits
+- Three browser suites in Chrome with Playwright, each running axe WCAG 2 A/AA and 2.1 AA checks on the pages it visits and failing on any uncaught script error:
+  - `tests/browser.cjs`: signup, invitations, a three-person draw, wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px, with no horizontal overflow.
+  - `tests/email.cjs`: confirmation, account settings, the draw email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It runs against a server with `GIFTY_SMTP_HOST=log`.
+  - `tests/gate.cjs`: the invite-only page, refusal of direct API signups, wrong and right codes, invited guests bypassing the code, and security headers. It runs against a server with an access code set.
+- Impeccable's design detector reports no findings on `web/`.
 
-Corrected misleading draw explanation to refer to the recipient rather than the user's own name. Fixed “1 ideas”, moved keyboard focus to main content after navigation, wrapped navigation on very narrow screens, and removed an empty accessibility span. Increased the mobile decoration's height and removed its secondary caption after spotting overlap. Cleared stale notifications on logout.
+Automated accessibility checks are evidence, not a certification; no screen-reader testing has been done.
 
-The interface uses direct task labels and no fabricated social proof or marketing claims. Decorative content is hidden from assistive technology. Confirmation dialogs explain irreversible draw and archive actions. User data is escaped before insertion; external links are validated server-side and use safe new-tab attributes.
+### Running the browser suites
+
+Install `playwright` and `@axe-core/playwright` (outside the repository is fine; point `NODE_PATH` at them). Set `GIFTY_CHROME` to a Chrome binary to use an installed browser, and `GIFTY_SCREENSHOTS` for where screenshots go. Start a separate server for each suite, then:
+
+```sh
+GIFTY_ADDR=127.0.0.1:8088 go run . &
+node tests/browser.cjs
+
+GIFTY_ADDR=127.0.0.1:8089 GIFTY_SMTP_HOST=log GIFTY_DATA=/tmp/mail.json go run . > /tmp/mail.log 2>&1 &
+GIFTY_TEST_URL=http://127.0.0.1:8089 GIFTY_MAIL_LOG=/tmp/mail.log node tests/email.cjs
+
+GIFTY_ADDR=127.0.0.1:8090 GIFTY_ACCESS_CODE='test gate code' GIFTY_DATA=/tmp/gate.json go run . &
+GIFTY_TEST_URL=http://127.0.0.1:8090 node tests/gate.cjs
+```
+
+Each suite signs up several accounts from one address, so restart its server between repeated runs to reset the 30-attempt rate limit.
+
+## Security review
+
+Reviewed against abuse rather than only correctness. Fixed:
+
+1. Password hashing (about 320 ms on the server) ran inside the global state lock, so repeated sign-in attempts could stall every user. It now runs outside the lock, after the rate limit, at most two at a time.
+2. Confirmation and reset emails could be requested repeatedly to flood someone's inbox. They are capped at 5 per person per day and 100 an hour site-wide.
+3. Organisers are limited to 20 active exchanges, and the rate limiter tracks at most 10,000 addresses, bounding data-file and memory growth.
+4. Added `Permissions-Policy` and `Cross-Origin-Opener-Policy`.
+
+Checked and unchanged:
+
+- Writes need same-origin JSON requests; one-click unsubscribe is protected by its own random token.
+- Exchange details, invite codes and other members' email addresses stay within the right audience.
+- User content is escaped in the page; email subjects are stripped of line breaks and encoded.
+- Tokens are 256-bit; reset and confirmation links expire and work once.
+- Gifty listens only on localhost behind Caddy, which supplies HTTPS and HSTS.
+- SSH is key-only, automatic security updates are on, and data files are private to the service user.
+
+Accepted for now:
+
+- Signup reveals whether an email already has an account; with the access gate on, only people past it can probe.
+- SSH is reachable from any address, though key-only.
+- There is no way to delete an account; add one before wider use.
+
+## Deployment
+
+Live at https://gifty.connorfleming.co.uk on AWS Lightsail with Amazon SES; see [deploy/README.md](../deploy/README.md). New accounts need the access code or an invitation link. SES production access was requested on 6 October 2026 and is under review; until it is granted, SES delivers only to verified addresses.
 
 ## Boundaries
 
-This is a complete local application, not a public deployment. The user supplied a local Go repository and no hosting destination. Run instructions and HTTPS deployment settings are in the README. The production app has no package dependencies beyond the Go standard library.
-
-The file store supports one process and modest groups (up to 100 participants per exchange). There is no mail delivery, password recovery, email verification, exclusion matching, or automatic reminder service. These are documented product boundaries, not placeholder controls. Back up the data file and configure HTTPS before public use.
-
-Impeccable's upstream skill and design references informed the task hierarchy, visual direction, accessibility, mobile review and copy. Its local launcher was unavailable; user-authorised autonomous decisions replaced interactive concept selection. PRODUCT.md, DESIGN.md and the surface brief document the outcome.
-
-Verdict: requested functionality implemented and verified. No known blocking defects remain.
+One process and one data file, for modest groups (up to 100 people per exchange). No exclusion matching and no invitations by email. The server operator can read stored assignments; privacy is enforced between users, not against whoever runs the server.

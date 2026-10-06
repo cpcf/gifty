@@ -59,7 +59,7 @@ go vet ./...
 node --check web/app.js
 ```
 
-Tests cover access control, draws over 3–100 participants, invitation lifecycle, wish ownership, validation, cross-origin rejection, restart persistence, logout and storage-failure rollback. Browser verification is described in [docs/review.md](docs/review.md).
+Go tests cover access control, draws over 3–100 participants, invitations, wish ownership and scoping, validation, cross-origin rejection, persistence, storage-failure rollback, email, reminders, the access gate and abuse limits. Browser suites in `tests/` drive Chrome with Playwright and axe; how to run them and what they cover is in [docs/review.md](docs/review.md).
 
 ## Design
 
