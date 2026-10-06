@@ -67,7 +67,7 @@ Accepted for now:
 
 ## Deployment
 
-Live at https://gifty.connorfleming.co.uk on AWS Lightsail with Amazon SES; see [deploy/README.md](../deploy/README.md). New accounts need the access code or an invitation link. SES production access was requested on 6 October 2026 and is under review; until it is granted, SES delivers only to verified addresses.
+Live at https://gifty.connorfleming.co.uk on AWS Lightsail with Amazon SES; see [deploy/README.md](../deploy/README.md). New accounts need the access code or an invitation link. SES production access has been granted, so mail reaches any recipient.
 
 ## Boundaries
 
