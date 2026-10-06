@@ -556,7 +556,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		code := strings.TrimPrefix(path, "invite/")
 		for _, e := range a.state.Exchanges {
 			if e.Invite == code && !e.Archived && len(e.Assignments) == 0 {
-				return map[string]any{"name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency}, nil
+				return map[string]any{"name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members)}, nil
 			}
 		}
 		return nil, problem{404, "This invitation is closed or no longer exists."}

@@ -194,6 +194,9 @@ func TestMembershipAndInviteRotation(t *testing.T) {
 	e := o.req("POST", "exchanges", map[string]string{"Name": "Friends", "Date": "2099-01-01", "Budget": "10", "Currency": "EUR"}, 200)
 	path := "exchanges/" + e["id"].(string)
 	code := e["invite"].(string)
+	if inv := b.req("GET", "invite/"+code, nil, 200); inv["organiser"] != "Owner" || inv["people"] != float64(1) {
+		t.Fatalf("invite = %v", inv)
+	}
 	b.req("POST", "join", map[string]string{"Code": code}, 200)
 	b.req("POST", path+"/leave", map[string]string{}, 200)
 	b.req("GET", path, nil, 404)
