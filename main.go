@@ -92,7 +92,7 @@ type Exchange struct {
 	Reminders   []Reminder
 	MyReminders map[string][]Reminder `json:",omitempty"` // members' own schedules, overriding the default
 	Reminded    map[string][]string   `json:",omitempty"` // keys of reminders already sent (or skipped), per member
-	Done        []string              `json:",omitempty"` // members who have their gift and want no more reminders
+	Ready       []string              `json:",omitempty"` // members with their gift ready to give, who want no more reminders
 }
 type Session struct {
 	User    string
@@ -276,7 +276,7 @@ func (a *App) exchange(e *Exchange, u *User) any {
 		member := map[string]any{"id": id, "name": m.Name}
 		if len(e.Assignments) > 0 {
 			// Whether someone has their gift is shared with the group; who it is for never is.
-			member["done"] = slices.Contains(e.Done, id)
+			member["ready"] = slices.Contains(e.Ready, id)
 		}
 		members = append(members, member)
 	}
@@ -289,7 +289,7 @@ func (a *App) exchange(e *Exchange, u *User) any {
 	if id := e.Assignments[u.ID]; id != "" {
 		m := a.state.Users[id]
 		v["recipient"] = map[string]any{"id": m.ID, "name": m.Name, "wishes": wishesFor(m, e)}
-		v["done"] = slices.Contains(e.Done, u.ID)
+		v["ready"] = slices.Contains(e.Ready, u.ID)
 	}
 	return v
 }
@@ -773,17 +773,17 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		return a.exchange(e, u), nil
 	}
-	if action == "done" {
+	if action == "ready" {
 		if len(e.Assignments) == 0 {
 			return nil, bad("The exchange isn’t locked in yet.")
 		}
-		var in struct{ Done bool }
+		var in struct{ Ready bool }
 		if err := readJSON(r, &in); err != nil {
 			return nil, err
 		}
-		e.Done = slices.DeleteFunc(e.Done, func(id string) bool { return id == u.ID })
-		if in.Done {
-			e.Done = append(e.Done, u.ID)
+		e.Ready = slices.DeleteFunc(e.Ready, func(id string) bool { return id == u.ID })
+		if in.Ready {
+			e.Ready = append(e.Ready, u.ID)
 		}
 		return a.exchange(e, u), nil
 	}

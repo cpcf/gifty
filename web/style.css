@@ -70,11 +70,13 @@ input[readonly]{background:var(--ground)}
 .check{display:flex;gap:12px;align-items:flex-start;font-weight:400;font-size:16px;min-height:44px;cursor:pointer}
 .check input{width:20px;height:20px;min-height:20px;flex-shrink:0;margin:2px 0 0;padding:0}
 .check .hint{display:block}
+.show-pw{min-height:36px;align-items:center;margin-top:2px;font-size:14px;gap:8px}
+.show-pw input{width:18px;height:18px;min-height:18px;margin:0}
 .choices{border:0;padding:0;margin:0 0 12px}
 .choices legend{font-weight:600;padding:0;margin-bottom:2px}
 .choices .check{align-items:center}
 .choices .check input{margin:0}
-.to-done{margin:8px 0 -8px}
+.to-ready{margin:8px 0 -8px}
 #reminders .quiet{padding-left:0}
 .check input[type=radio]{border-radius:50%}
 .nested{margin:4px 0 4px 0}
@@ -200,33 +202,45 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .tk .name{display:block;font-weight:800;font-size:19px;line-height:1.2;overflow-wrap:anywhere}
 .tk .sub{display:block;font-size:14px;font-weight:600}
 .tk .gift{font-size:14px;font-weight:700;white-space:nowrap}
+/* The stub tab on your own row: torn off into a slot under the row (and taped back on). Decorative, so none of it takes pointer events. */
+#people{position:relative}
+.tab-clip{position:absolute;overflow:hidden;z-index:3;pointer-events:none}
+.tab-ghost{position:absolute;left:8px;top:14px;display:grid;place-items:center;font-weight:800;font-size:22px;font-variant-numeric:tabular-nums;border-right:2px dashed var(--ink);transform-origin:0 100%;-webkit-mask:radial-gradient(circle 7px at 0 50%,#0000 97%,#000),radial-gradient(circle 6px at 100% 0,#0000 97%,#000),radial-gradient(circle 6px at 100% 100%,#0000 97%,#000);-webkit-mask-composite:source-in;mask:radial-gradient(circle 7px at 0 50%,#0000 97%,#000),radial-gradient(circle 6px at 100% 0,#0000 97%,#000),radial-gradient(circle 6px at 100% 100%,#0000 97%,#000);mask-composite:intersect}
+.tab-slot{position:absolute;z-index:3;width:120px;height:8px;border-radius:4px;background:var(--ink);transform-origin:left center;pointer-events:none}
 .tk .quiet{flex:none;padding-right:0}
 .tk.open{-webkit-mask:none;mask:none}
-.tk.open:before,.tk.open:after,.tk.torn:before,.tk.torn:after{display:none}
+.tk.open:before,.tk.open:after{display:none}
 .tk.open .stub,.tk.open .main{background:transparent;border:2px dashed var(--field-line);color:var(--muted)}
 .tk.open .stub{border-radius:3px 0 0 3px;font-weight:700}
 .tk.open .main{border-left:0;border-radius:0 3px 3px 0}
 .tk.open .name{font-weight:400;font-size:16px}
 .tk.torn .stub{background:transparent;color:var(--muted);border:2px dashed var(--field-line);border-radius:3px 0 0 3px;font-weight:600}
 
-/* The drum, shown before the lock-in and when it is time to draw. */
-.drumbox{display:grid;grid-template-columns:140px minmax(0,1fr);gap:24px;align-items:center;background:var(--sheet);border:2px solid var(--ink);border-radius:3px;padding:20px 24px}
+/* The raffle machine, shown before the lock-in and when it is time to draw. Its slot is the bottom edge of the box: the ticket slides out from under it. */
+.drumbox{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:center;position:relative;z-index:1;background:var(--sheet);border:2px solid var(--ink);border-radius:3px;padding:20px 24px}
+.drumbox:after{content:"";position:absolute;left:12px;bottom:-5px;width:min(436px,calc(100% - 24px));height:8px;border-radius:4px;background:var(--ink)}
 .drumbox h2{margin-bottom:6px}
 .drumbox p{margin:0 0 12px}
-.drumbox .joined{font-weight:600;margin:0}
 .drumbox h2:focus{outline:none}
 .drumbox h2:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
-.drum-wrap{position:relative;width:140px;height:140px}
-.drum{width:140px;height:140px;overflow:visible;display:block}
-.drum .shell{fill:var(--sheet);stroke:var(--ink);stroke-width:3}
-.drum .stand,.drum .crank{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:round}
-.drum .hub,.drum .knob{fill:var(--ink)}
-.drum .cage rect{stroke:var(--ink);stroke-width:1.5}
-.drum .cage .a{fill:var(--yellow)}.drum .cage .b{fill:var(--pink)}.drum .cage .c{fill:var(--blue)}.drum .cage .d{fill:var(--mint)}.drum .cage .e{fill:var(--orange)}
-.drum .cage,.drum .crank,.drum .knob{transform-origin:70px 60px}
-.drum{position:relative;z-index:1}
+.drum-wrap{position:relative;width:240px;max-width:100%}
+.mach{position:relative;z-index:1;background:var(--ink);border-radius:6px;padding:10px 10px 12px}
+.lamps{display:flex;justify-content:space-between;margin:0 2px 8px}
+.lamps i{width:10px;height:10px;border-radius:50%;background:#5a5c63}
+.won .lamps i{background:var(--yellow)}
+.win{position:relative;height:64px;overflow:hidden;background:var(--sheet);border-radius:2px}
+/* A roller shutter covers the window until the draw, then rolls up. */
+.shutter{position:absolute;inset:0;background:repeating-linear-gradient(var(--rule) 0 6px,var(--field-line) 6px 8px);border-bottom:6px solid var(--ink)}
+.shutter:after{content:"";position:absolute;left:50%;bottom:-6px;width:36px;height:8px;margin-left:-18px;border-radius:2px 2px 0 0;background:var(--ink)}
+.spinning .shutter,.won .shutter{transform:translateY(-110%)}
+.rr{height:64px;display:flex;align-items:center}
+.rr b{align-self:stretch;width:56px;flex:none;display:grid;place-items:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;border-right:2px dashed var(--ink)}
+.rr span{flex:1;min-width:0;padding:0 12px;font-size:22px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr.n{background:var(--paper)}.rr.y{background:var(--yellow)}.rr.p{background:var(--pink)}.rr.b{background:var(--blue)}.rr.m{background:var(--mint)}.rr.o{background:var(--orange)}
 .chip{display:none;position:absolute;left:50%;top:-8px;max-width:116px;transform:translateX(-50%);padding:5px 10px;font-size:13px;font-weight:800;line-height:1.2;border:2px solid var(--ink);border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:0}
 .chip.y{background:var(--yellow)}.chip.p{background:var(--pink)}.chip.b{background:var(--blue)}.chip.m{background:var(--mint)}.chip.o{background:var(--orange)}
+.drumbox.ejecting+.my-ticket{margin-top:0}
+.my-ticket{position:relative;z-index:0}
 
 /* Your ticket: the bottom half folds over the top. Covered, it is paper-coloured with no name in the page at all. */
 .my-ticket{max-width:460px}
@@ -237,7 +251,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .face{background:var(--c)}
 .half.top .face{display:flex;min-height:104px;position:relative}
 .half.bottom .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden}
-.half.bottom .face.front{padding:10px 18px;border-top:2px dashed var(--ink)}
+.half.bottom .face.front{padding:10px 18px;border-top:2px dashed var(--ink);display:flex;align-items:center}
 .half.bottom .face.back{transform:rotateX(180deg)}
 .half .face:before,.half .face:after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:var(--ground);z-index:1}
 .half.top .face:before{left:-8px;bottom:-8px}.half.top .face:after{right:-8px;bottom:-8px}
@@ -249,8 +263,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .fold .name{display:block;font-size:40px;font-weight:800;line-height:1.05;letter-spacing:-.02em;overflow-wrap:anywhere;min-height:42px}
 .fold .name.long{font-size:28px}
 .fold .name.cover{width:78%;height:40px;min-height:0;margin-top:2px;border-radius:2px;background:var(--ink)}
-.half.bottom p{margin:0 0 4px;font-size:14px;font-weight:600}
-.half.bottom .to-done{margin:0}
+.half.bottom .to-ready{margin:0}
 .hold{margin-top:14px;max-width:460px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 .hero-art .tickets{margin-bottom:6px}
 .hero-art p{font-size:14px;margin:10px 0 0}
@@ -259,6 +272,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 }
 @media(max-width:640px){
 .drumbox{grid-template-columns:1fr;justify-items:start;padding:18px}
+.drum-wrap{width:100%;max-width:280px}
 .half.top .stub{width:72px;font-size:26px}
 .fold .name{font-size:32px;min-height:34px}
 .fold .name.long{font-size:24px}
@@ -298,17 +312,32 @@ nav{width:100%;justify-content:space-between}
 
 @media(prefers-reduced-motion:no-preference){
 button:active,.button:active{transform:translateY(1px)}
-/* The one authored moment, and it is the same for everyone: the drum turns, a folded ticket slides out and unfolds. Joining drops a folded name in. */
-.drumbox.spinning .cage,.drumbox.spinning .crank,.drumbox.spinning .knob{animation:spin 1.4s cubic-bezier(.45,0,.2,1) both}
-.my-ticket.arriving{animation:slide-in .6s cubic-bezier(.16,1,.3,1) both}
-.fold.unfold{animation:grow .9s cubic-bezier(.22,1,.36,1) .55s backwards}
-.fold.unfold .half.bottom{animation:unfold .9s cubic-bezier(.22,1,.36,1) .55s backwards}
+/* The one authored moment, and it is the same for everyone: the machine reel runs through everyone, lands on a name, and a folded ticket ratchets out of the slot and unfolds. Joining drops a folded name into the machine. */
+.shutter{transition:transform .6s cubic-bezier(.5,0,.3,1)}
+.drumbox.spinning .lamps i{animation:lamp .3s steps(1) infinite}
+.drumbox.spinning .lamps i:nth-child(even){animation-delay:.15s}
+.my-ticket.arriving{animation:eject 1.5s linear both}
+.fold.unfold{animation:grow .9s cubic-bezier(.22,1,.36,1) var(--d,.55s) backwards}
+.fold.unfold .half.bottom{animation:unfold .9s cubic-bezier(.22,1,.36,1) var(--d,.55s) backwards}
 .dropping .chip{display:block;animation:drop 2.4s ease-in .4s both}
-.dropping .drum{animation:wiggle .5s ease-out 2.6s}
+.dropping .mach{animation:wiggle .5s ease-out 2.6s}
 }
-@keyframes spin{to{transform:rotate(720deg)}}
-@keyframes slide-in{from{transform:translateX(36px);opacity:0}to{transform:none;opacity:1}}
+@keyframes lamp{0%{background:var(--yellow)}50%{background:#5a5c63}}
+/* A ticket ratchets out of the slot in jerks, like prize tickets from an arcade game, and settles with a small bounce. */
+@keyframes eject{0%{transform:translateY(-112px);animation-timing-function:ease-out}18%{transform:translateY(-84px)}24%{transform:translateY(-84px);animation-timing-function:ease-out}42%{transform:translateY(-52px)}48%{transform:translateY(-52px);animation-timing-function:ease-out}66%{transform:translateY(-18px)}72%{transform:translateY(-18px);animation-timing-function:ease-in}86%{transform:translateY(6px);animation-timing-function:ease-out}100%{transform:translateY(0)}}
 @keyframes grow{from{height:var(--h)}to{height:calc(var(--h)*2)}}
 @keyframes unfold{from{transform:rotateX(180deg)}to{transform:rotateX(0)}}
 @keyframes drop{0%{opacity:0;transform:translate(-50%,-12px) scaleY(1)}15%{opacity:1;transform:translate(-50%,0) scaleY(1)}40%{opacity:1;transform:translate(-50%,0) scaleY(.5)}55%{opacity:1;transform:translate(-50%,2px) scale(.7,.5)}88%{opacity:1;transform:translate(-50%,40px) scale(.5,.35)}100%{opacity:1;transform:translate(-50%,56px) scale(.4,.3)}}
 @keyframes wiggle{25%{transform:rotate(-2.5deg)}75%{transform:rotate(2.5deg)}}
+/* Tape on your own row. Each placement is a strip (40 by 18) centred a little left of the perforation so it bridges the stub and the ticket. A scrap is the part right of the perforation, cut with a zigzag; the stub takes the other half with it. */
+.tp{position:absolute;inset:0;z-index:2;pointer-events:none;transform-origin:var(--sw) 50%}
+.tp b{position:absolute;left:calc(var(--sw) + var(--dx) - 20px);top:var(--y);width:40px;height:18px;margin-top:-9px;transform:rotate(var(--a));background:rgba(240,232,200,.82);box-shadow:0 1px 1px rgba(28,29,32,.25);clip-path:polygon(0 0,100% 0,96% 25%,100% 50%,96% 75%,100% 100%,0 100%,4% 75%,0 50%,4% 25%)}
+.tp.p0 b{--y:50%;--a:-8deg;--dx:-8px}
+.tp.p1 b{--y:22%;--a:14deg;--dx:-8px}
+.tp.p2 b{--y:78%;--a:-16deg;--dx:-8px}
+.tp.p3 b{--y:36%;--a:-30deg;--dx:-9px}
+.tp.p4 b{--y:66%;--a:24deg;--dx:-9px}
+.tp.p5 b{--y:12%;--a:-4deg;--dx:-8px}
+.tp.scrap{clip-path:polygon(var(--sw) 0,100% 0,100% 100%,var(--sw) 100%,calc(var(--sw) - 5px) 87.5%,var(--sw) 75%,calc(var(--sw) - 5px) 62.5%,var(--sw) 50%,calc(var(--sw) - 5px) 37.5%,var(--sw) 25%,calc(var(--sw) - 5px) 12.5%)}
+.tab-ghost{--sw:64px}
+.tp.half{clip-path:polygon(0 0,var(--sw) 0,calc(var(--sw) - 5px) 12.5%,var(--sw) 25%,calc(var(--sw) - 5px) 37.5%,var(--sw) 50%,calc(var(--sw) - 5px) 62.5%,var(--sw) 75%,calc(var(--sw) - 5px) 87.5%,var(--sw) 100%,0 100%)}

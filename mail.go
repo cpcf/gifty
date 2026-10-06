@@ -202,7 +202,7 @@ func longDate(s string) string {
 func (a *App) drawn(e *Exchange) {
 	organiser := a.state.Users[e.Owner].Name
 	for _, id := range e.Members {
-		a.queue(a.state.Users[id], true, "Draw your name: "+e.Name, fmt.Sprintf("%s has locked in %s. Everyone is in, so it’s time to draw your name.\n\nSign in, draw your name and see their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
+		a.queue(a.state.Users[id], true, "Draw a name: "+e.Name, fmt.Sprintf("%s has locked in %s. Everyone is in, so it’s time to draw a name.\n\nSign in and draw a name to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
 	}
 	// Reminders whose day has already arrived are covered by this email.
 	for _, id := range e.Members {
@@ -235,11 +235,11 @@ func (a *App) remind(now time.Time) bool {
 			when = "today"
 		}
 		for _, id := range e.Members {
-			if slices.Contains(e.Done, id) || !a.dueReminders(e, id, now) {
+			if slices.Contains(e.Ready, id) || !a.dueReminders(e, id, now) {
 				continue
 			}
 			changed = true
-			a.queue(a.state.Users[id], true, fmt.Sprintf("Reminder: %s is %s", e.Name, when), fmt.Sprintf("%s is %s, on %s.\n\nSpending limit: %s\n\nSign in to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nAlready got your gift? Tick “I’ve got my gift” on the exchange page and you won’t get any more reminders for it. You can also change when you get reminders there.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID))
+			a.queue(a.state.Users[id], true, fmt.Sprintf("Reminder: %s is %s", e.Name, when), fmt.Sprintf("%s is %s, on %s.\n\nSpending limit: %s\n\nSign in to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nIs their gift already ready? Tick “I’ve got their gift ready” on the exchange page to stop these reminders. You can also change when you get reminders there.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID))
 		}
 	}
 	return changed

@@ -10,7 +10,7 @@ Requires Go 1.26.2 or newer.
 go run .
 ```
 
-Open http://127.0.0.1:8080. Create an account, create an exchange, and send the invitation link to your participants. Three people must join before the organiser can lock in the exchange. Locking in assigns each person exactly one recipient, never themselves. Each person then opens the exchange and draws their name (a short animation; the assignment is already made), and their ticket stays covered until they press and hold it.
+Open http://127.0.0.1:8080. Create an account, create an exchange, and send the invitation link to your participants. Three people must join before the organiser can lock in the exchange. Locking in assigns each person exactly one recipient, never themselves. Each person then opens the exchange and draws a name (a short animation; the assignment is already made), and their ticket stays covered until they press and hold it.
 
 For a standalone binary with embedded web assets:
 
@@ -25,7 +25,7 @@ go build -o gifty .
 - Exchanges with a date, budget, currency and shared note.
 - Shareable invitation links, replacement links, joining, leaving and organiser removal before lock-in.
 - Private, cryptographically random assignment when the organiser locks in the exchange. Membership and details lock at that point; there is no redraw button.
-- Each person draws their own name in the app (a short, cosmetic animation: the assignment is already made). Their ticket is covered by default, with no name in the page, until they press and hold it (keyboard and screen readers: activate to show, again to hide). The recipient's wish list stays visible under the covered ticket so it can be used while shopping, so it can show a name if an idea mentions one.
+- Each person draws a name in the app (a short, cosmetic animation: the assignment is already made). Their ticket is covered by default, with no name in the page, until they press and hold it (keyboard and screen readers: activate to show, again to hide). The recipient's wish list stays visible under the covered ticket so it can be used while shopping, so it can show a name if an idea mentions one.
 - Personal gift suggestions with optional product links and notes; create, edit and remove ideas.
 - Recipient wish lists that stay current as ideas change.
 - Archiving, responsive layouts, keyboard-accessible dialogs and inline form errors.
@@ -50,7 +50,7 @@ For other people to use invitations, deploy the binary behind an HTTPS reverse p
 
 Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Session tokens are random and stored as SHA-256 digests. Cookies are HttpOnly and SameSite=Lax. The server checks write origins, limits authentication attempts, bounds request bodies, escapes rendered user content and sends a restrictive content security policy. The authentication limiter uses the connection IP; a reverse proxy shares that limit unless deployed with suitable edge rate limiting and a trusted client-IP design.
 
-Email addresses identify accounts. With email on, Gifty sends a confirmation link at signup, password-reset links, a notice when it is time to draw your name and reminders before the exchange. Reminders are any number of days, weeks or calendar months before the date (up to 8). The organiser sets each exchange’s default (a week and the day before unless changed); each person can set their own for every exchange on their account page or for one exchange on its page, and ticking “I’ve got my gift” stops reminders for that exchange. Wish-list ideas can be shown in every exchange or only in chosen ones; givers only see ideas meant for their exchange. Exchange emails go only to confirmed addresses, never name a recipient and carry a one-click unsubscribe link. Messages are queued in the data file in the same save as the change that caused them, sent in the background and retried with backoff. Try it locally with `GIFTY_SMTP_HOST=log go run .`. Invitations are still shared manually. Exchange exclusions and gift reservations are outside this version. The administrator can read stored assignments; privacy is enforced between app users, not against the server operator.
+Email addresses identify accounts. With email on, Gifty sends a confirmation link at signup, password-reset links, a notice when it is time to draw a name and reminders before the exchange. Reminders are any number of days, weeks or calendar months before the date (up to 8). The organiser sets each exchange’s default (a week and the day before unless changed); each person can set their own for every exchange on their account page or for one exchange on its page, and ticking “I’ve got my gift” stops reminders for that exchange. Wish-list ideas can be shown in every exchange or only in chosen ones; givers only see ideas meant for their exchange. Exchange emails go only to confirmed addresses, never name a recipient and carry a one-click unsubscribe link. Messages are queued in the data file in the same save as the change that caused them, sent in the background and retried with backoff. Try it locally with `GIFTY_SMTP_HOST=log go run .`. Invitations are still shared manually. Exchange exclusions and gift reservations are outside this version. The administrator can read stored assignments; privacy is enforced between app users, not against the server operator.
 
 ## Verify
 

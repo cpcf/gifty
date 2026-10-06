@@ -283,7 +283,7 @@ func TestReminders(t *testing.T) {
 	if m["source"] != "exchange" {
 		t.Fatalf("source %v", m["source"])
 	}
-	cs["ana"].req("POST", "exchanges/"+id+"/done", map[string]bool{"Done": true}, 400)
+	cs["ana"].req("POST", "exchanges/"+id+"/ready", map[string]bool{"Ready": true}, 400)
 	cs["ana"].req("POST", "exchanges/"+id+"/draw", nil, 200)
 
 	month := date.AddDate(0, -1, 0)
@@ -314,12 +314,12 @@ func TestReminders(t *testing.T) {
 	ex2 := a.state.Exchanges[e2["id"].(string)]
 	ex2.Members = slices.Clone(ex.Members)
 	cs["ana"].req("POST", "exchanges/"+ex2.ID+"/draw", nil, 200)
-	cs["ben"].req("POST", "exchanges/"+ex2.ID+"/done", map[string]bool{"Done": true}, 200)
+	cs["ben"].req("POST", "exchanges/"+ex2.ID+"/ready", map[string]bool{"Ready": true}, 200)
 	// Everyone can see who has their gift, but nothing about who it is for.
 	view := cs["cat"].req("GET", "exchanges/"+ex2.ID, nil, 200)
 	for _, raw := range view["members"].([]any) {
 		m := raw.(map[string]any)
-		if want := m["id"] == a.state.Exchanges[ex2.ID].Members[1]; m["done"] != want || len(m) != 3 {
+		if want := m["id"] == a.state.Exchanges[ex2.ID].Members[1]; m["ready"] != want || len(m) != 3 {
 			t.Fatalf("member view = %v", m)
 		}
 	}
