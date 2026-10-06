@@ -1,12 +1,10 @@
 # Gifty app — Operate
 
-Every screen in `web/` is one Operate surface: people come to get a task done (invite, draw, choose a gift), and the visual world supports that rather than leading. This page summarises the design direction. The working brief Impeccable reads is `.impeccable/surfaces/web-index-html.md`; the implemented system, with tokens, is in [DESIGN.md](../DESIGN.md).
+Every screen in `web/` is one Operate surface: people come to get a task done (invite, draw, choose a gift), and the visual world supports that rather than leading. This page summarises the design direction and the screens.
 
 ## Direction: fete raffle
 
-Chosen on 6 October 2026, replacing an earlier plum, lilac and lime look and then an internal-mail look.
-
-An exchange is a raffle at a village fete. People are raffle tickets and your recipient comes out of a raffle machine. Gifty is for the owner's friends and family, so it is built to be fun and useful, not to convert anyone. It rejects the festive red-and-green Secret Santa look and the pastel-plus-acid startup look.
+An exchange is a raffle at a village fete. People are raffle tickets and your recipient comes out of a raffle machine. Gifty is for the owner's friends and family, so it is built to be fun and useful, not to convert anyone. It avoids the festive red-and-green Secret Santa look and the pastel-plus-acid startup look.
 
 - **Palette:** a warm grey ground, white sheets for working surfaces and one near-black ink for text, rules and the only filled button. Five flat paper colours (yellow, pink, blue, mint, orange) are handed to tickets in turn and mean nothing else. No shadows, gradients or texture.
 - **Type:** Public Sans, self-hosted, one family, with tabular figures for numbers. Small uppercase labels name a value beside them and never sit above headings as slogans.
@@ -17,7 +15,7 @@ An exchange is a raffle at a village fete. People are raffle tickets and your re
 
 ## Screens
 
-- **Signed-out home:** a short explanation, the rules of a draw, and a worked example reveal ticket. When an access code is configured, visitors without access see a short invite-only page instead; invitation links bypass it.
+- **Signed-out home:** a short explanation, the rules of a draw, and a worked example reveal ticket. When an access code is configured, visitors without access see a short invite-only page instead, including in place of the sign-in page; invitation links let a guest sign up without the code.
 - **Exchanges:** a table with fixed date, limit, people and status columns, which becomes stacked rows on phones. An archived exchange offers its organiser a Delete control on the row.
 - **Exchange:** facts strip, the machine box before you draw (then your reveal ticket), your recipient's wish list, the note, the ticket list of people (which shows whose gift is ready, never who it is for) and a short summary of email reminders with editors behind "Change reminders". Invitation and draw actions, or your wish-list prompt, sit in a side column that comes first on phones while the exchange is open. An archived exchange ends with a Delete control for its organiser.
 - **Invitation:** who sent it, the date, the limit and how many have joined.

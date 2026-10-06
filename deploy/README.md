@@ -8,10 +8,10 @@ This is one way to run Gifty for yourself: a single small Linux server (the scri
 | --- | --- |
 | `setup.sh` | Adds swap, installs Caddy and creates the `gifty` user and directories. Safe to rerun |
 | `deploy.sh user@host` | Runs the tests, builds a Linux binary, installs it with the service, backup timer and Caddy config, and restarts Gifty. Data is not touched |
-| `set-access-code.sh user@host` | Prompts for a new `GIFTY_ACCESS_CODE` (empty removes it), updates `/etc/gifty/env` and restarts Gifty |
+| `set-access-code.sh user@host` | Prompts for a new `GIFTY_ACCESS_CODE` (empty removes it, `generate` makes a random one), updates `/etc/gifty/env` and restarts Gifty |
 | `Caddyfile` | Serves `GIFTY_DOMAIN`, gets a certificate and proxies to Gifty on 127.0.0.1:8080 |
-| `gifty.service` | Runs Gifty as the `gifty` user with `/etc/gifty/env` for configuration |
-| `gifty-backup.*` | Daily copy of the data file to `/var/lib/gifty/backups`, kept 14 days |
+| `gifty.service` | Runs Gifty as the `gifty` user with `/etc/gifty/env` for configuration, trusting Caddy for client addresses (`GIFTY_TRUST_PROXY`) |
+| `gifty-backup.*` | Daily copy of the data file to `/var/lib/gifty/backups`, kept 14 days. It does not copy `gifty.key` |
 | `env.example` | Every setting the server reads; copy to `/etc/gifty/env` (root:gifty, mode 640) and never commit the real file |
 
 ## Setting up
@@ -20,7 +20,7 @@ This is one way to run Gifty for yourself: a single small Linux server (the scri
 2. Run `ssh user@host sudo sh -s < deploy/setup.sh`.
 3. Write `/etc/gifty/env` from `env.example`: set `GIFTY_DOMAIN`, `GIFTY_BASE_URL`, `GIFTY_MAIL_FROM`, the SMTP credentials and, if you want a private instance, `GIFTY_ACCESS_CODE`.
 4. Run `deploy/deploy.sh user@host`. Caddy gets a certificate once DNS resolves.
-5. To restore data, stop Gifty, copy a backup to `/var/lib/gifty/gifty.json` (owner `gifty`, mode 600) and start it again.
+5. To restore data, stop Gifty, copy a backup to `/var/lib/gifty/gifty.json` (owner `gifty`, mode 600) and start it again. `/var/lib/gifty/gifty.key` stays where it is; on a new server Gifty creates a fresh one, which only means people re-enter the access code and old unsubscribe links stop working.
 
 ## Email with Amazon SES
 

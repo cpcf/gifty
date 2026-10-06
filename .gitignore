@@ -2,5 +2,7 @@
 /gifty
 /node_modules/
 /test-results/
-/.impeccable/hook.cache.json
+/.impeccable/
+/DESIGN.md
+/PRODUCT.md
 /.claude/
