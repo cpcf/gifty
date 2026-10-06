@@ -29,7 +29,7 @@ go build -o gifty .
 - Personal gift suggestions with optional product links and notes; create, edit and remove ideas.
 - Recipient wish lists that stay current as ideas change.
 - Account deletion from the account page, and an admin page (for `GIFTY_ADMINS`) to remove accounts and exchanges without touching the data file.
-- Archiving, responsive layouts, keyboard-accessible dialogs and inline form errors.
+- Archiving; organisers can delete an archived exchange from the list or its page. Responsive layouts, keyboard-accessible dialogs and inline form errors.
 
 ## Storage and hosting
 

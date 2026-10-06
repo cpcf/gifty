@@ -287,6 +287,16 @@ func (a *App) removeUser(u *User) error {
 	*a.state.Users[u.ID] = User{ID: u.ID, Name: deletedName, Wishes: []Wish{}}
 	return nil
 }
+
+// removeExchange deletes an exchange and clears it from the scope of ideas that named it.
+func (a *App) removeExchange(id string) {
+	delete(a.state.Exchanges, id)
+	for _, v := range a.state.Users {
+		for i := range v.Wishes {
+			v.Wishes[i].Exchanges = slices.DeleteFunc(v.Wishes[i].Exchanges, func(x string) bool { return x == id })
+		}
+	}
+}
 func (a *App) byToken(match func(*User) bool) *User {
 	for _, u := range a.state.Users {
 		if match(u) {
@@ -860,6 +870,17 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		return a.exchange(e, u), nil
 	}
+	if action == "delete" {
+		// Deleting is permanent for everyone in the exchange, so it is for organisers, and only once it is archived.
+		if e.Owner != u.ID {
+			return nil, problem{403, "Only the organiser can do that."}
+		}
+		if !e.Archived {
+			return nil, bad("Archive the exchange before deleting it.")
+		}
+		a.removeExchange(e.ID)
+		return map[string]bool{"ok": true}, nil
+	}
 	if e.Owner != u.ID {
 		return nil, problem{403, "Only the organiser can do that."}
 	}
@@ -974,12 +995,7 @@ func (a *App) admin(path string, r *http.Request, u *User) (any, error) {
 		if a.state.Exchanges[in.ID] == nil {
 			return nil, problem{404, "Exchange not found."}
 		}
-		delete(a.state.Exchanges, in.ID)
-		for _, v := range a.state.Users {
-			for i := range v.Wishes {
-				v.Wishes[i].Exchanges = slices.DeleteFunc(v.Wishes[i].Exchanges, func(id string) bool { return id == in.ID })
-			}
-		}
+		a.removeExchange(in.ID)
 		return map[string]bool{"ok": true}, nil
 	}
 	return nil, problem{404, "Page not found."}

@@ -470,3 +470,42 @@ func TestAdmin(t *testing.T) {
 		t.Fatal("admin deletion left data behind")
 	}
 }
+
+func TestExchangeDeletion(t *testing.T) {
+	a := setup(t)
+	owner, member, stranger := &client{t: t, a: a}, &client{t: t, a: a}, &client{t: t, a: a}
+	owner.signup("Alex")
+	memberID := member.signup("Bea")
+	stranger.signup("Cara")
+	e := owner.req("POST", "exchanges", map[string]string{"Name": "Old gifts", "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)
+	id, code := e["id"].(string), e["invite"].(string)
+	path := "exchanges/" + id
+	member.req("POST", "join", map[string]string{"Code": code}, 200)
+	// An idea scoped to the exchange loses that scope when the exchange goes.
+	member.req("POST", "wishes", map[string]any{"title": "Blue mug", "exchanges": []string{id}}, 200)
+	// Deleting is for organisers, and only once the exchange is archived.
+	stranger.req("POST", path+"/delete", map[string]string{}, 404)
+	member.req("POST", path+"/delete", map[string]string{}, 403)
+	owner.req("POST", path+"/delete", map[string]string{}, 400)
+	owner.req("POST", path+"/archive", map[string]string{}, 200)
+	member.req("POST", path+"/delete", map[string]string{}, 403)
+	owner.req("POST", path+"/delete", map[string]string{}, 200)
+	owner.req("GET", path, nil, 404)
+	member.req("GET", path, nil, 404)
+	if a.state.Exchanges[id] != nil {
+		t.Fatal("exchange not deleted")
+	}
+	for _, w := range a.state.Users[memberID].Wishes {
+		if len(w.Exchanges) != 0 {
+			t.Fatal("wish scope not cleared")
+		}
+	}
+	// The deletion is durable.
+	reopened, err := openApp(a.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.state.Exchanges[id] != nil {
+		t.Fatal("deleted exchange persisted")
+	}
+}

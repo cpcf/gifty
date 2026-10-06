@@ -18,8 +18,8 @@ An exchange is a raffle at a village fete. People are raffle tickets and your re
 ## Screens
 
 - **Signed-out home:** a short explanation, the rules of a draw, and a worked example reveal ticket. When an access code is configured, visitors without access see a short invite-only page instead; invitation links bypass it.
-- **Exchanges:** a table with fixed date, limit, people and status columns, which becomes stacked rows on phones.
-- **Exchange:** facts strip, the machine box before you draw (then your reveal ticket), your recipient's wish list, the note, the ticket list of people (which shows whose gift is ready, never who it is for) and a short summary of email reminders with editors behind "Change reminders". Invitation and draw actions, or your wish-list prompt, sit in a side column that comes first on phones while the exchange is open.
+- **Exchanges:** a table with fixed date, limit, people and status columns, which becomes stacked rows on phones. An archived exchange offers its organiser a Delete control on the row.
+- **Exchange:** facts strip, the machine box before you draw (then your reveal ticket), your recipient's wish list, the note, the ticket list of people (which shows whose gift is ready, never who it is for) and a short summary of email reminders with editors behind "Change reminders". Invitation and draw actions, or your wish-list prompt, sit in a side column that comes first on phones while the exchange is open. An archived exchange ends with a Delete control for its organiser.
 - **Invitation:** who sent it, the date, the limit and how many have joined.
 - **Wish list:** ideas grouped into "Every exchange" and one section per exchange; each idea chooses who can see it.
 - **Account:** email on or off, reminders that apply to every exchange unless set for one, and account deletion (password required). Deleting removes the person from open exchanges; in a drawn exchange they stay as an empty “Deleted account” so the draw still adds up. Organisers must archive exchanges that have other people first.

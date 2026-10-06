@@ -130,6 +130,7 @@ th:last-child,td:last-child{padding-right:0}
 .exchanges tr.archived td:first-child a{text-decoration-line:line-through;text-decoration-color:var(--muted);color:var(--muted)}
 .exchanges .role{display:block;font-size:14px;color:var(--muted)}
 .exchanges .unseen{display:block;font-size:14px;font-weight:600}
+.exchanges .quiet{display:block;width:max-content;padding:2px 0 0;font-size:14px;color:var(--muted)}
 .status{display:inline-block;font-size:14px;font-weight:600;padding:3px 8px;border-radius:2px;border:1px solid var(--ink);white-space:nowrap;background:var(--sheet)}
 .status.drawn{background:var(--ink);color:var(--on-ink)}
 .status.archived{border-style:dashed;border-color:var(--field-line);color:var(--muted);background:transparent}
