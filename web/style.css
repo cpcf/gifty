@@ -252,12 +252,41 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .half.bottom p{margin:0 0 4px;font-size:14px;font-weight:600}
 .half.bottom .to-done{margin:0}
 .hold{margin-top:14px;max-width:460px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
-.example .fold{max-width:420px}
-.example .half.bottom{min-height:0}
-.example .half.bottom .face.front{position:relative}
-.example p{font-size:14px;margin:14px 0 0}
-.example h2{margin-bottom:12px}
+.hero-art .tickets{margin-bottom:6px}
+.hero-art p{font-size:14px;margin:10px 0 0}
+.invited{margin:0}
+.how{margin-top:56px;padding-top:24px;border-top:2px solid var(--ink)}
+.steps{list-style:none;margin:20px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px;counter-reset:step}
+.steps>li{counter-increment:step;min-width:0}
+.steps h3{font-size:19px;margin:14px 0 6px}
+.steps h3:before{content:counter(step) ". ";font-variant-numeric:tabular-nums}
+.steps p{font-size:16px;margin:0}
+.step-art{min-height:184px;display:flex;flex-direction:column;justify-content:flex-start;gap:10px;pointer-events:none;user-select:none}
+.step-art .facts{margin:0;width:100%}
+.step-art .facts>div{padding:10px 14px;min-width:0}
+.step-art .tickets .tk{margin-bottom:8px;min-height:52px}
+.step-art .tk .stub{--sw:48px;width:48px;font-size:17px}
+.step-art .tk:before,.step-art .tk:after{left:calc(48px - 6px)}
+.step-art .tk .name{font-size:16px}
+.step-art .tk.open .name{font-size:14px}
+.step-art .fold{--h:84px}
+.step-art .half.top .face{min-height:84px}
+.step-art .half.top .stub{width:56px;font-size:22px}
+.step-art .half.top .main{padding:12px 12px 10px}
+.step-art .fold .name{font-size:24px;min-height:26px}
+.step-art .fold .name.cover{height:26px}
+.step-art .half.bottom{min-height:0}
+.step-art .half.bottom .face.front{position:relative;padding:8px 12px}
+.step-art .half.bottom p{margin:0;font-size:13px}
+.fake{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border:1px solid var(--ink);border-radius:3px;background:var(--ink);color:var(--on-ink);font-weight:600;font-size:16px;line-height:1.25;text-align:center}
+.fake.secondary{background:var(--sheet);color:var(--ink)}
+.how-note{margin-top:28px;max-width:70ch}
+@media(max-width:1000px){
+.steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media(max-width:640px){
+.steps{grid-template-columns:1fr}
+.step-art{min-height:0}
 .drumbox{grid-template-columns:1fr;justify-items:start;padding:18px}
 .half.top .stub{width:72px;font-size:26px}
 .fold .name{font-size:32px;min-height:34px}
