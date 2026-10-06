@@ -202,7 +202,7 @@ func longDate(s string) string {
 func (a *App) drawn(e *Exchange) {
 	organiser := a.state.Users[e.Owner].Name
 	for _, id := range e.Members {
-		a.queue(a.state.Users[id], true, "Draw a name: "+e.Name, fmt.Sprintf("%s has locked in %s. Everyone is in, so it’s time to draw a name.\n\nSign in and draw a name to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
+		a.queue(a.state.Users[id], true, "Draw a name: "+e.Name, fmt.Sprintf("%s has closed entries for %s. Everyone is in, so it’s time to draw a name.\n\nSign in and draw a name to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
 	}
 	// Reminders whose day has already arrived are covered by this email.
 	for _, id := range e.Members {

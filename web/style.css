@@ -217,7 +217,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .tk.open .name{font-weight:400;font-size:16px}
 .tk.torn .stub{background:transparent;color:var(--muted);border:2px dashed var(--field-line);border-radius:3px 0 0 3px;font-weight:600}
 
-/* The raffle machine, shown before the lock-in and when it is time to draw. Its slot is the bottom edge of the box: the ticket slides out from under it. */
+/* The raffle machine, shown before entries close and when it is time to draw. Its slot is the bottom edge of the box: the ticket slides out from under it. */
 .drumbox{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:center;position:relative;z-index:1;background:var(--sheet);border:2px solid var(--ink);border-radius:3px;padding:20px 24px}
 .drumbox:after{content:"";position:absolute;left:12px;bottom:-5px;width:min(436px,calc(100% - 24px));height:8px;border-radius:4px;background:var(--ink)}
 .drumbox h2{margin-bottom:6px}

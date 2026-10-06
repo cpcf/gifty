@@ -775,7 +775,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	if action == "ready" {
 		if len(e.Assignments) == 0 {
-			return nil, bad("The exchange isn’t locked in yet.")
+			return nil, bad("Entries aren’t closed yet.")
 		}
 		var in struct{ Ready bool }
 		if err := readJSON(r, &in); err != nil {
@@ -814,19 +814,19 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		e.Archived = true
 	case "edit":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Details are locked once the exchange is locked in.")
+			return nil, bad("Details can’t be changed once entries are closed.")
 		}
 		if err := details(r, e); err != nil {
 			return nil, err
 		}
 	case "rotate":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Invitations are closed once the exchange is locked in.")
+			return nil, bad("Invitations stop working once entries are closed.")
 		}
 		e.Invite = token()
 	case "remove":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Membership is locked once the exchange is locked in.")
+			return nil, bad("Nobody can be removed or leave once entries are closed.")
 		}
 		var in struct{ ID string }
 		if err := readJSON(r, &in); err != nil {
@@ -838,10 +838,10 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		e.Members = slices.DeleteFunc(e.Members, func(id string) bool { return id == in.ID })
 	case "draw":
 		if len(e.Assignments) > 0 {
-			return nil, bad("The exchange is already locked in.")
+			return nil, bad("Entries are already closed.")
 		}
 		if len(e.Members) < 3 {
-			return nil, bad("You need at least three people to lock in names.")
+			return nil, bad("You need at least three people to close entries.")
 		}
 		e.Assignments = draw(e.Members)
 		a.drawn(e)

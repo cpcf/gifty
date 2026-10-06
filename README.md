@@ -10,7 +10,7 @@ Requires Go 1.26.2 or newer.
 go run .
 ```
 
-Open http://127.0.0.1:8080. Create an account, create an exchange, and send the invitation link to your participants. Three people must join before the organiser can lock in the exchange. Locking in assigns each person exactly one recipient, never themselves. Each person then opens the exchange and draws a name (a short animation; the assignment is already made), and their ticket stays covered until they press and hold it.
+Open http://127.0.0.1:8080. Create an account, create an exchange, and send the invitation link to your participants. Three people must join before the organiser can close entries. Closing entries assigns each person exactly one recipient, never themselves. Each person then opens the exchange and draws a name (a short animation; the assignment is already made), and their ticket stays covered until they press and hold it.
 
 For a standalone binary with embedded web assets:
 
@@ -23,8 +23,8 @@ go build -o gifty .
 
 - Account creation, sign-in, sign-out and persistent 30-day sessions.
 - Exchanges with a date, budget, currency and shared note.
-- Shareable invitation links, replacement links, joining, leaving and organiser removal before lock-in.
-- Private, cryptographically random assignment when the organiser locks in the exchange. Membership and details lock at that point; there is no redraw button.
+- Shareable invitation links, replacement links, joining, leaving and organiser removal before entries close.
+- Private, cryptographically random assignment when the organiser closes entries. Membership and details are fixed at that point; there is no redraw button.
 - Each person draws a name in the app (a short, cosmetic animation: the assignment is already made). Their ticket is covered by default, with no name in the page, until they press and hold it (keyboard and screen readers: activate to show, again to hide). The recipient's wish list stays visible under the covered ticket so it can be used while shopping, so it can show a name if an idea mentions one.
 - Personal gift suggestions with optional product links and notes; create, edit and remove ideas.
 - Recipient wish lists that stay current as ideas change.
