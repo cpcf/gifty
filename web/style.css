@@ -238,7 +238,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .rr b{align-self:stretch;width:56px;flex:none;display:grid;place-items:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;border-right:2px dashed var(--ink)}
 .rr span{flex:1;min-width:0;padding:0 12px;font-size:22px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rr.n{background:var(--paper)}.rr.y{background:var(--yellow)}.rr.p{background:var(--pink)}.rr.b{background:var(--blue)}.rr.m{background:var(--mint)}.rr.o{background:var(--orange)}
-.chip{display:none;position:absolute;left:50%;top:-8px;max-width:116px;transform:translateX(-50%);padding:5px 10px;font-size:13px;font-weight:800;line-height:1.2;border:2px solid var(--ink);border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:0}
+.chip{display:none;position:absolute;left:50%;top:-8px;max-width:116px;transform:translateX(-50%);padding:5px 10px;font-size:14px;font-weight:800;line-height:1.2;border:2px solid var(--ink);border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:0}
 .chip.y{background:var(--yellow)}.chip.p{background:var(--pink)}.chip.b{background:var(--blue)}.chip.m{background:var(--mint)}.chip.o{background:var(--orange)}
 .drumbox.ejecting+.my-ticket{margin-top:0}
 .my-ticket{position:relative;z-index:0}
@@ -260,7 +260,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .half.bottom .face.back:before,.half.bottom .face.back:after{display:none}
 .half.top .stub{width:84px;flex:none;display:grid;place-items:center;font-weight:800;font-size:40px;font-variant-numeric:tabular-nums;border-right:2px dashed var(--ink)}
 .half.top .main{flex:1;min-width:0;padding:18px 18px 14px;display:flex;flex-direction:column;justify-content:center}
-.half.top .k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.half.top .k{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 .fold .name{display:block;font-size:40px;font-weight:800;line-height:1.05;letter-spacing:-.02em;overflow-wrap:anywhere;min-height:42px}
 .fold .name.long{font-size:28px}
 .fold .name.cover{width:78%;height:40px;min-height:0;margin-top:2px;border-radius:2px;background:var(--ink)}
