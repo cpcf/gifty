@@ -57,13 +57,13 @@ const tapePiece=(i,cls='')=>`<i class="tp p${i}${cls?' '+cls:''}" aria-hidden="t
 function tapePieces(id,ready){const n=taped.n(id);if(!n)return'';const p=(n-1)%tapeSpots;let h='';for(let i=0;i<p;i++)h+=tapePiece(i,'scrap');return h+tapePiece(p,ready?'scrap':'')}
 async function tabTrick(on,peel=false){const sec=$('#people'),li=$('.tk[data-self]',sec),stub=li&&$('.stub',li);if(!stub||still())return;
 const sr=sec.getBoundingClientRect(),r=stub.getBoundingClientRect(),w=r.width,h=r.height,x=r.left-sr.left,y=r.top-sr.top,n=taped.n(current.id),spot=(n-1)%tapeSpots,tape=!on&&n?$('.tp:not(.scrap)',li):null,clip=document.createElement('div'),slot=document.createElement('div');
-clip.className='tab-clip';clip.setAttribute('aria-hidden','true');Object.assign(clip.style,{left:x-8+'px',top:y-14+'px',width:w+16+'px',height:h+15+'px'});
-const ghost=document.createElement('div');ghost.className='tab-ghost';ghost.textContent=stub.textContent.trim();Object.assign(ghost.style,{width:w+'px',height:h+'px',background:getComputedStyle(li).getPropertyValue('--c').trim()});if(!on)ghost.style.transform=`translate(0,${h+3}px)`;if(on&&n)ghost.insertAdjacentHTML('beforeend',tapePiece(spot,'half'));clip.append(ghost);
-slot.className='tab-slot';slot.setAttribute('aria-hidden','true');Object.assign(slot.style,{left:x-8+'px',top:y+h+1+'px'});
+clip.className='tab-clip';clip.setAttribute('aria-hidden','true');Object.assign(clip.style,{left:x-8+'px',top:y-14+'px',width:w+16+'px',height:h+19+'px'});
+const ghost=document.createElement('div');ghost.className='tab-ghost';ghost.textContent=stub.textContent.trim();Object.assign(ghost.style,{width:w+'px',height:h+'px',background:getComputedStyle(li).getPropertyValue('--c').trim()});if(!on)ghost.style.transform=`translate(0,${h+6}px)`;if(on&&n)ghost.insertAdjacentHTML('beforeend',tapePiece(spot,'half'));clip.append(ghost);
+slot.className='tab-slot';slot.setAttribute('aria-hidden','true');Object.assign(slot.style,{left:x-8+'px',top:y+h+1+'px',width:w+16+'px'});
 sec.append(clip,slot);let old=[];if(!on){li.classList.add('torn');if(tape)tape.style.opacity=0;if(peel){li.insertAdjacentHTML('afterbegin',Array.from({length:tapeSpots},(_,i)=>tapePiece(i,'scrap')).join(''));old=[...li.querySelectorAll('.tp.scrap')]}}
 const at=d=>`translate(0,${d}px)`,hold=(o,d,rot='0deg')=>({offset:o,transform:`${at(d)} rotate(${rot})`}),
-feed=[hold(0,0),{offset:.14,transform:'translate(-3px,-7px) rotate(-8deg)'},hold(.26,-9,'-2deg'),hold(.4,h*.2),hold(.46,h*.2),hold(.62,h*.5),hold(.68,h*.5),hold(.86,h*.8),hold(1,h+3)],
-eject=[hold(0,h+3),hold(.18,h*.8),hold(.24,h*.8),hold(.42,h*.5),hold(.48,h*.5),hold(.66,h*.2),hold(.72,h*.2),hold(.88,-3,'-1.5deg'),hold(1,0)];
+feed=[hold(0,0),{offset:.14,transform:'translate(-3px,-7px) rotate(-8deg)'},hold(.26,-9,'-2deg'),hold(.4,h*.2),hold(.46,h*.2),hold(.62,h*.5),hold(.68,h*.5),hold(.86,h*.8),hold(1,h+6)],
+eject=[hold(0,h+6),hold(.18,h*.8),hold(.24,h*.8),hold(.42,h*.5),hold(.48,h*.5),hold(.66,h*.2),hold(.72,h*.2),hold(.88,-3,'-1.5deg'),hold(1,0)];
 for(const k of [...feed,...eject])k.easing='ease-in-out';
 try{await slot.animate([{transform:'scaleX(0)'},{transform:'scaleX(1)'}],{duration:180,easing:'ease-out',fill:'both'}).finished;
 await ghost.animate(on?feed:eject,{duration:on?1000:1100,fill:'both'}).finished;
