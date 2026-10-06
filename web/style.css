@@ -1,6 +1,7 @@
 @font-face{font-family:"Public Sans";src:url(/public-sans.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 :root{--ink:#1c1d20;--ink-hover:#383a40;--muted:#52555c;--ground:#f1f1ec;--sheet:#fff;--rule:#c9cac4;--rule-light:#dcdcd6;--field-line:#7a7d84;--paper:#e7e6df;--yellow:#f6d84c;--pink:#f4a6b8;--blue:#8cc5ee;--mint:#a8dcc0;--orange:#f5a65b;--error-bg:#fdf3bd;--on-ink:#fff;--backdrop:#1c1d2073;color-scheme:light;font-family:"Public Sans",system-ui,sans-serif;color:var(--ink);background:var(--ground);font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}
+html,body{overflow-x:clip}
 body{margin:0;background:var(--ground);line-height:1.5}
 a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}
 a:hover{text-decoration-thickness:2px}
