@@ -15,9 +15,9 @@ An exchange is treated like a reusable office internal-mail envelope: a ruled gr
 
 ## Screens
 
-- **Signed-out home:** a short explanation, the rules of a draw, and a worked example of what one person sees after it. When an access code is configured, visitors without access see a short invite-only page instead; invitation links bypass it.
+- **Signed-out home:** a short explanation, the rules of a draw, and a worked example: the TO box one person sees after the draw. When an access code is configured, visitors without access see a short invite-only page instead; invitation links bypass it.
 - **Exchanges:** a table with fixed date, limit, people and status columns, which becomes stacked rows on phones.
-- **Exchange:** facts strip, TO line, the recipient's wish list for this exchange, the note, the participant grid and a one-line summary of email reminders with editors behind “Change”, with invitation and draw actions in a side column. On phones the organiser of an open exchange sees the invitation and draw first. The first view after the draw is the one animated moment: the TO slip arrives and the name is written in.
+- **Exchange:** facts strip, TO line, the recipient's wish list for this exchange, the note, the participant grid (which ticks off who has their gift after the draw, never who it is for) and a short summary of email reminders with editors behind “Change reminders”, with invitation and draw actions, or your wish-list prompt, in a side column that comes first on phones while the exchange is open. The first view after the draw is the one animated moment: the TO slip arrives and the name is written in.
 - **Invitation:** who sent it, the date, the limit and how many have joined.
 - **Wish list:** ideas grouped into "Every exchange" and one section per exchange; each idea chooses who can see it.
 - **Account:** email on or off, and reminders that apply to every exchange unless set for one.

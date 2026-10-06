@@ -273,7 +273,12 @@ func (a *App) exchange(e *Exchange, u *User) any {
 	members := []any{}
 	for _, id := range e.Members {
 		m := a.state.Users[id]
-		members = append(members, map[string]any{"id": id, "name": m.Name})
+		member := map[string]any{"id": id, "name": m.Name}
+		if len(e.Assignments) > 0 {
+			// Whether someone has their gift is shared with the group; who it is for never is.
+			member["done"] = slices.Contains(e.Done, id)
+		}
+		members = append(members, member)
 	}
 	v := map[string]any{"id": e.ID, "name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "note": e.Note, "owner": e.Owner, "members": members, "drawn": len(e.Assignments) > 0, "archived": e.Archived, "reminders": e.defaultReminders()}
 	mine, source := a.reminders(e, u.ID)

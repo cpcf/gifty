@@ -50,6 +50,7 @@ main{max-width:1184px;margin:0 auto;padding:40px 32px 80px;min-height:calc(100vh
 .page-head h1+.status{margin-top:2px}
 .page-head p{margin-bottom:0}
 .page-head>.button,.page-head>button{flex-shrink:0;white-space:nowrap}
+.page-head>.quiet{align-self:flex-start;margin-right:-8px}
 #reminders{margin-top:32px}
 .rem-row{max-width:420px}
 .back{display:inline-flex;align-items:center;min-height:44px;font-size:16px;margin:-12px 0 4px}
@@ -89,10 +90,15 @@ input[readonly]{background:var(--ground)}
 .rem-change>summary{display:inline-flex;align-items:center;min-height:44px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-weight:500}
 .rem-change>summary:hover{text-decoration-thickness:2px}
 .rem-change[open]>summary{font-weight:700;text-decoration:none}
-.rem-change .rem-editor{padding:6px 0 4px 16px;border-left:1px solid var(--rule);margin:2px 0 8px}
+.rem-body{padding:4px 0 4px 16px;border-left:1px solid var(--rule);margin:2px 0 8px}
+.rem-body h3{margin:12px 0 8px}
+.rem-own{margin-top:4px}
+.rem-own .rem-editor{margin-top:6px}
 #account-reminders{margin-top:20px}
 .form-error{background:var(--error-bg);color:var(--ink);border:2px solid var(--ink);border-radius:2px;padding:10px 14px;font-weight:600;margin:0 0 18px;font-size:16px}
 .form-error:empty{display:none}
+.form-error p{margin:0}
+.form-error ul{margin:4px 0 0;padding-left:20px}
 .narrow{max-width:520px}
 .form-page{max-width:640px}
 .field-hint{margin:-10px 0 18px}
@@ -105,7 +111,8 @@ input[readonly]{background:var(--ground)}
 .home .buttons{margin:24px 0 32px}
 .rules{padding:0;margin:0;list-style:none;border-top:1px solid var(--rule)}
 .rules li{padding:10px 0;border-bottom:1px solid var(--rule);font-size:16px}
-.example table{margin-top:8px}
+.example .to{margin:8px 0 12px}
+.example .to-line{margin-bottom:12px}
 .example p{font-size:14px;margin:12px 0 0}
 
 /* Tables */
@@ -141,9 +148,10 @@ nav a{white-space:nowrap}
 .detail section+section{margin-top:32px}
 .to{border:2px solid var(--ink);border-radius:3px;background:var(--sheet);padding:20px 24px 18px}
 .to-line{display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--ink);padding-bottom:4px;margin-bottom:12px}
-.to-line h2{font-size:14px;font-weight:800;letter-spacing:.1em;margin:0;flex-shrink:0}
-.to:focus{outline:none}
-.to:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+.to-line{font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:normal;margin-top:0}
+.to-mark{font-size:14px;font-weight:800;letter-spacing:.1em;flex-shrink:0}
+.to-line:focus{outline:none}
+.to-line:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
 .to .recipient{color:var(--biro);font-size:32px;font-weight:600;line-height:1.15;margin:0;min-width:0;overflow-wrap:break-word;hyphens:manual;text-wrap:balance}
 .to .recipient.long{font-size:26px}
 .to .pending{font-size:19px;font-weight:500;color:var(--muted);margin:0}
@@ -155,13 +163,16 @@ nav a{white-space:nowrap}
 .routing th,.routing td{border:1px solid var(--rule);padding:0 12px;height:52px}
 .routing th{height:32px;border-bottom:2px solid var(--ink);padding:0 12px;vertical-align:middle}
 .routing .no{width:56px;text-align:center;color:var(--muted)}
-.routing td.no,.routing td.role{font-size:14px}
+.routing td.no{font-size:14px}
 .routing th.no{color:var(--muted)}
-.routing .role{width:150px;color:var(--muted)}
 .routing .act{width:104px;text-align:center}
 .routing td.name{font-weight:600;overflow-wrap:anywhere}
 .routing tr.open-line td{color:var(--muted);font-weight:400}
-.routing .role-inline{display:none;font-size:14px;font-weight:400;color:var(--muted)}
+.routing .role-line{display:block;font-size:14px;font-weight:400;color:var(--muted)}
+.routing .gift{width:120px}
+.routing td.gift{font-size:14px;font-weight:600}
+.routing td.gift .muted{font-weight:400}
+.tick{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px}
 .routing button{font-size:14px;min-height:44px}
 .grid-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .grid-head .num{white-space:nowrap}
@@ -196,7 +207,7 @@ dialog h2{padding-right:48px}
 dialog .close{position:absolute;right:8px;top:8px;min-width:44px;font-size:16px}
 dialog h3{margin-top:18px}
 .draw-list{list-style:none;counter-reset:n;padding:0;margin:0;border:2px solid var(--ink);font-variant-numeric:tabular-nums}
-.draw-list li{counter-increment:n;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;min-height:40px;border-bottom:1px solid var(--rule);font-weight:600;overflow-wrap:anywhere}
+.draw-list li{counter-increment:n;display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:12px;padding-right:12px;align-items:center;min-height:40px;border-bottom:1px solid var(--rule);font-weight:600;overflow-wrap:anywhere}
 .draw-list li:last-child{border-bottom:0}
 .draw-list li:before{content:counter(n,decimal-leading-zero);align-self:stretch;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--rule);color:var(--muted);font-size:14px;font-weight:400}
 dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
@@ -207,7 +218,7 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 @media(max-width:860px){
 .home,.detail{grid-template-columns:1fr;gap:32px}
 .detail{grid-template-areas:"main" "side" "after"}
-.detail.organising{grid-template-areas:"side" "main" "after"}
+.detail.side-first{grid-template-areas:"side" "main" "after"}
 }
 @media(max-width:640px){
 header{padding:0 16px}
@@ -216,6 +227,7 @@ nav a{padding:0 8px;font-size:14px}
 main{padding:28px 16px 64px}
 h1,.home h1{font-size:26px}
 .page-head{flex-direction:column;align-items:stretch}
+.page-head>.quiet{margin:-16px 0 0 -8px}
 .sheet{padding:18px}
 .facts>div{flex:1 1 50%;border-right:0;border-bottom:1px solid var(--rule-light)}
 .to{padding:16px}
@@ -229,10 +241,10 @@ h1,.home h1{font-size:26px}
 .exchanges td[data-label]:before{content:attr(data-label) " ";color:var(--muted);font-size:14px}
 .exchanges tbody{display:block;border-top:2px solid var(--ink)}
 .row{flex-direction:column;gap:0}
-.routing .role{display:none}
-.routing .role-inline{display:block}
 .routing .act{width:84px}
 .routing .no{width:40px}
+.routing .gift{width:96px}
+.facts>.wide{flex-basis:100%}
 .routing th,.routing td{padding:0 8px}
 }
 @media(max-width:340px){
@@ -245,7 +257,9 @@ button:active,.button:active{transform:translateY(1px)}
 .to.arrive{animation:slip-out .7s cubic-bezier(.16,1,.3,1) both}
 .to.arrive .to-line{animation:rule-in .6s cubic-bezier(.16,1,.3,1) .25s both}
 .to.arrive .recipient{animation:write-in 1s cubic-bezier(.33,1,.68,1) .45s both}
+.to.arrive>p,.to.arrive .to-done{animation:settle .5s ease-out 1.3s both}
 }
 @keyframes slip-out{from{transform:translateY(18px);clip-path:inset(0 0 100% 0)}to{transform:none;clip-path:inset(-12px)}}
+@keyframes settle{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(-6px)}}
 @keyframes rule-in{from{border-bottom-color:transparent}to{border-bottom-color:var(--ink)}}
 @keyframes write-in{from{clip-path:inset(-8px 100% -8px 0)}to{clip-path:inset(-8px -8px -8px 0)}}

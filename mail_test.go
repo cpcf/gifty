@@ -315,6 +315,14 @@ func TestReminders(t *testing.T) {
 	ex2.Members = slices.Clone(ex.Members)
 	cs["ana"].req("POST", "exchanges/"+ex2.ID+"/draw", nil, 200)
 	cs["ben"].req("POST", "exchanges/"+ex2.ID+"/done", map[string]bool{"Done": true}, 200)
+	// Everyone can see who has their gift, but nothing about who it is for.
+	view := cs["cat"].req("GET", "exchanges/"+ex2.ID, nil, 200)
+	for _, raw := range view["members"].([]any) {
+		m := raw.(map[string]any)
+		if want := m["id"] == a.state.Exchanges[ex2.ID].Members[1]; m["done"] != want || len(m) != 3 {
+			t.Fatalf("member view = %v", m)
+		}
+	}
 	// A reminder added after its date has passed isn't sent late.
 	cs["cat"].req("POST", "exchanges/"+ex2.ID+"/my-reminders", map[string]any{"Reminders": rem(2, "week", 1, "day")}, 200)
 	if got := sentOn(a, time.Now()); len(got) != 0 {
