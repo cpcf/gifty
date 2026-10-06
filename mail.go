@@ -197,12 +197,12 @@ func longDate(s string) string {
 	return d.Format("Monday 2 January 2006")
 }
 
-// drawn emails every member. The recipient's name is never put in an email:
+// drawn emails every member once the organiser has locked the exchange in. The recipient's name is never put in an email:
 // inboxes are shared, previewed and forwarded, so it stays behind sign-in.
 func (a *App) drawn(e *Exchange) {
 	organiser := a.state.Users[e.Owner].Name
 	for _, id := range e.Members {
-		a.queue(a.state.Users[id], true, "Names have been drawn: "+e.Name, fmt.Sprintf("%s has drawn names for %s.\n\nSign in to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
+		a.queue(a.state.Users[id], true, "Draw your name: "+e.Name, fmt.Sprintf("%s has locked in %s. Everyone is in, so it’s time to draw your name.\n\nSign in, draw your name and see their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
 	}
 	// Reminders whose day has already arrived are covered by this email.
 	for _, id := range e.Members {

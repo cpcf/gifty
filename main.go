@@ -288,7 +288,7 @@ func (a *App) exchange(e *Exchange, u *User) any {
 	}
 	if id := e.Assignments[u.ID]; id != "" {
 		m := a.state.Users[id]
-		v["recipient"] = map[string]any{"name": m.Name, "wishes": wishesFor(m, e)}
+		v["recipient"] = map[string]any{"id": m.ID, "name": m.Name, "wishes": wishesFor(m, e)}
 		v["done"] = slices.Contains(e.Done, u.ID)
 	}
 	return v
@@ -775,7 +775,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	if action == "done" {
 		if len(e.Assignments) == 0 {
-			return nil, bad("Names haven’t been drawn yet.")
+			return nil, bad("The exchange isn’t locked in yet.")
 		}
 		var in struct{ Done bool }
 		if err := readJSON(r, &in); err != nil {
@@ -814,19 +814,19 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		e.Archived = true
 	case "edit":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Details are locked after the draw.")
+			return nil, bad("Details are locked once the exchange is locked in.")
 		}
 		if err := details(r, e); err != nil {
 			return nil, err
 		}
 	case "rotate":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Invitations are closed after the draw.")
+			return nil, bad("Invitations are closed once the exchange is locked in.")
 		}
 		e.Invite = token()
 	case "remove":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Membership is locked after the draw.")
+			return nil, bad("Membership is locked once the exchange is locked in.")
 		}
 		var in struct{ ID string }
 		if err := readJSON(r, &in); err != nil {
@@ -838,10 +838,10 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		e.Members = slices.DeleteFunc(e.Members, func(id string) bool { return id == in.ID })
 	case "draw":
 		if len(e.Assignments) > 0 {
-			return nil, bad("Names have already been drawn.")
+			return nil, bad("The exchange is already locked in.")
 		}
 		if len(e.Members) < 3 {
-			return nil, bad("You need at least three people to draw names.")
+			return nil, bad("You need at least three people to lock in names.")
 		}
 		e.Assignments = draw(e.Members)
 		a.drawn(e)

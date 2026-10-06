@@ -1,5 +1,5 @@
 @font-face{font-family:"Public Sans";src:url(/public-sans.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
-:root{--ink:#1d2b22;--ink-hover:#33463a;--muted:#584c31;--buff:#d9bd80;--ground:#efe4c6;--sheet:#fff;--rule:#bfb291;--rule-light:#ddd6c4;--field-line:#7b7461;--biro:#c0161f;--error-bg:#f6ecd2;--on-ink:#fff;--shadow:#1d2b2233;--backdrop:#1d2b2273;color-scheme:light;font-family:"Public Sans",system-ui,sans-serif;color:var(--ink);background:var(--ground);font-synthesis:none;-webkit-text-size-adjust:100%}
+:root{--ink:#1c1d20;--ink-hover:#383a40;--muted:#52555c;--ground:#f1f1ec;--sheet:#fff;--rule:#c9cac4;--rule-light:#dcdcd6;--field-line:#7a7d84;--paper:#e7e6df;--yellow:#f6d84c;--pink:#f4a6b8;--blue:#8cc5ee;--mint:#a8dcc0;--orange:#f5a65b;--error-bg:#fdf3bd;--on-ink:#fff;--backdrop:#1c1d2073;color-scheme:light;font-family:"Public Sans",system-ui,sans-serif;color:var(--ink);background:var(--ground);font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);line-height:1.5}
 a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px}
@@ -10,7 +10,7 @@ h1{font-size:30px;line-height:1.15;letter-spacing:-.01em;margin-bottom:12px;font
 h2{font-size:19px;line-height:1.3;margin-bottom:10px}
 h3{font-size:16px;line-height:1.35;margin-bottom:6px}
 p{max-width:65ch}
-::selection{background:var(--buff);color:var(--ink)}
+::selection{background:var(--yellow);color:var(--ink)}
 :focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 main:focus{outline:none}
 .label{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
@@ -35,8 +35,9 @@ button:disabled{cursor:not-allowed;background:transparent;color:var(--muted);bor
 .buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 
 /* Shell */
-header{background:var(--buff);border-bottom:2px solid var(--ink);min-height:64px;padding:0 max(32px,calc((100% - 1120px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px}
-.wordmark{font-size:19px;font-weight:800;letter-spacing:-.01em;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+header{background:var(--sheet);border-bottom:2px solid var(--ink);min-height:64px;padding:0 max(32px,calc((100% - 1120px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px}
+.wordmark{font-size:17px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;min-height:44px;display:inline-flex;align-items:center;position:relative;padding:0 14px;isolation:isolate}
+.wordmark:before{content:"";position:absolute;inset:7px 0;background:var(--yellow);z-index:-1;-webkit-mask:radial-gradient(circle 5px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat;mask:radial-gradient(circle 5px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat}
 nav{display:flex;align-items:center;gap:4px}
 nav a{min-height:44px;display:inline-flex;align-items:center;padding:0 12px;text-decoration:none;font-size:16px}
 nav a:hover{text-decoration:underline}
@@ -103,7 +104,6 @@ input[readonly]{background:var(--ground)}
 .form-page{max-width:640px}
 .field-hint{margin:-10px 0 18px}
 .switch{margin-top:16px}
-.biro{color:var(--biro)}
 
 /* Signed-out home */
 .home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:48px;align-items:start}
@@ -111,8 +111,6 @@ input[readonly]{background:var(--ground)}
 .home .buttons{margin:24px 0 32px}
 .rules{padding:0;margin:0;list-style:none;border-top:1px solid var(--rule)}
 .rules li{padding:10px 0;border-bottom:1px solid var(--rule);font-size:16px}
-.example .to{margin:8px 0 12px}
-.example .to-line{margin-bottom:12px}
 .example p{font-size:14px;margin:12px 0 0}
 
 /* Tables */
@@ -133,11 +131,11 @@ th:last-child,td:last-child{padding-right:0}
 .empty .button{margin-top:4px}
 
 /* Exchange detail */
-.facts{display:flex;flex-wrap:wrap;width:fit-content;max-width:100%;margin:0 0 28px;background:var(--sheet);border:1px solid var(--rule);border-radius:3px}
-.facts>div{padding:12px 20px;border-right:1px solid var(--rule-light)}
+.facts{display:flex;flex-wrap:wrap;max-width:100%;margin:0 0 28px;background:var(--sheet);border:1px solid var(--rule);border-radius:3px}
+.facts>div{flex:1 1 0;padding:12px 20px;border-right:1px solid var(--rule-light)}
 .facts>div:last-child{border-right:0}
 .facts.stacked{flex-direction:column;width:auto}
-.facts.stacked>div{border-right:0;border-bottom:1px solid var(--rule-light)}
+.facts.stacked>div{flex:none;border-right:0;border-bottom:1px solid var(--rule-light)}
 .facts.stacked>div:last-child{border-bottom:0}
 nav a{white-space:nowrap}
 .facts dd{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;margin:0}
@@ -146,34 +144,8 @@ nav a{white-space:nowrap}
 .detail>aside{grid-area:side}
 .detail>.after{grid-area:after;margin-top:-20px}
 .detail section+section{margin-top:32px}
-.to{border:2px solid var(--ink);border-radius:3px;background:var(--sheet);padding:20px 24px 18px}
-.to-line{display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--ink);padding-bottom:4px;margin-bottom:12px}
-.to-line{font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:normal;margin-top:0}
-.to-mark{font-size:14px;font-weight:800;letter-spacing:.1em;flex-shrink:0}
-.to-line:focus{outline:none}
-.to-line:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
-.to .recipient{color:var(--biro);font-size:32px;font-weight:600;line-height:1.15;margin:0;min-width:0;overflow-wrap:break-word;hyphens:manual;text-wrap:balance}
-.to .recipient.long{font-size:26px}
-.to .pending{font-size:19px;font-weight:500;color:var(--muted);margin:0}
-.to p{margin:0}
 .note{white-space:pre-wrap;overflow-wrap:anywhere}
 
-/* The routing grid: numbered, ruled lines that fill as people join. */
-.routing{border:2px solid var(--ink);background:var(--sheet);table-layout:fixed}
-.routing th,.routing td{border:1px solid var(--rule);padding:0 12px;height:52px}
-.routing th{height:32px;border-bottom:2px solid var(--ink);padding:0 12px;vertical-align:middle}
-.routing .no{width:56px;text-align:center;color:var(--muted)}
-.routing td.no{font-size:14px}
-.routing th.no{color:var(--muted)}
-.routing .act{width:104px;text-align:center}
-.routing td.name{font-weight:600;overflow-wrap:anywhere}
-.routing tr.open-line td{color:var(--muted);font-weight:400}
-.routing .role-line{display:block;font-size:14px;font-weight:400;color:var(--muted)}
-.routing .gift{width:120px}
-.routing td.gift{font-size:14px;font-weight:600}
-.routing td.gift .muted{font-weight:400}
-.tick{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px}
-.routing button{font-size:14px;min-height:44px}
 .grid-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .grid-head .num{white-space:nowrap}
 
@@ -181,6 +153,7 @@ aside .sheet+.sheet{margin-top:16px}
 aside h2{font-size:16px}
 aside p{font-size:16px}
 .invite input{font-size:16px;margin-bottom:10px}
+.invite .secondary+.secondary{margin-top:10px}
 .invite .quiet{padding-left:0;margin-top:4px}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .after{margin-top:12px}
@@ -194,7 +167,7 @@ aside p{font-size:16px}
 .wishes p{margin:0 0 6px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted)}
 .wishes .actions{display:flex;gap:4px;flex-shrink:0}
 .wishes .actions button{font-size:14px}
-.wish-page{max-width:720px}
+.wish-page>section{max-width:720px}
 .wish-group{margin-bottom:32px}
 .wish-group>.muted{margin:12px 0}
 .indent{margin-left:32px}
@@ -212,9 +185,86 @@ dialog h3{margin-top:18px}
 .draw-list li:before{content:counter(n,decimal-leading-zero);align-self:stretch;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--rule);color:var(--muted);font-size:14px;font-weight:400}
 dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:20px}
-#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--on-ink);padding:12px 20px;border-radius:3px;box-shadow:0 4px 16px var(--shadow);max-width:calc(100vw - 32px);z-index:20}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--on-ink);padding:12px 20px;border-radius:3px;max-width:calc(100vw - 32px);z-index:20}
 #toast:empty{display:none}
 
+/* Tickets. People are tickets: a numbered stub, a perforation, a flat paper colour handed out in turn. Nothing else on the page is ticket-shaped. */
+.tickets{list-style:none;margin:0;padding:0}
+.tk{--c:var(--yellow);--sw:64px;--g:var(--ground);position:relative;display:flex;min-height:64px;margin:0 0 10px;-webkit-mask:radial-gradient(circle 7px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 7px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat;mask:radial-gradient(circle 7px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 7px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat}
+.tk.y{--c:var(--yellow)}.tk.p{--c:var(--pink)}.tk.b{--c:var(--blue)}.tk.m{--c:var(--mint)}.tk.o{--c:var(--orange)}
+.tk .stub{width:var(--sw);flex:none;background:var(--c);display:grid;place-items:center;font-weight:800;font-size:22px;font-variant-numeric:tabular-nums;border-right:2px dashed var(--ink)}
+.tk .main{flex:1;min-width:0;background:var(--c);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tk:before,.tk:after{content:"";position:absolute;left:calc(var(--sw) - 6px);width:12px;height:12px;border-radius:50%;background:var(--g);z-index:1}
+.tk:before{top:-6px}.tk:after{bottom:-6px}
+.tk .who{min-width:0}
+.tk .name{display:block;font-weight:800;font-size:19px;line-height:1.2;overflow-wrap:anywhere}
+.tk .sub{display:block;font-size:14px;font-weight:600}
+.tk .gift{font-size:14px;font-weight:700;white-space:nowrap}
+.tk .quiet{flex:none;padding-right:0}
+.tk.open{-webkit-mask:none;mask:none}
+.tk.open:before,.tk.open:after,.tk.torn:before,.tk.torn:after{display:none}
+.tk.open .stub,.tk.open .main{background:transparent;border:2px dashed var(--field-line);color:var(--muted)}
+.tk.open .stub{border-radius:3px 0 0 3px;font-weight:700}
+.tk.open .main{border-left:0;border-radius:0 3px 3px 0}
+.tk.open .name{font-weight:400;font-size:16px}
+.tk.torn .stub{background:transparent;color:var(--muted);border:2px dashed var(--field-line);border-radius:3px 0 0 3px;font-weight:600}
+
+/* The drum, shown before the lock-in and when it is time to draw. */
+.drumbox{display:grid;grid-template-columns:140px minmax(0,1fr);gap:24px;align-items:center;background:var(--sheet);border:2px solid var(--ink);border-radius:3px;padding:20px 24px}
+.drumbox h2{margin-bottom:6px}
+.drumbox p{margin:0 0 12px}
+.drumbox .joined{font-weight:600;margin:0}
+.drumbox h2:focus{outline:none}
+.drumbox h2:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+.drum-wrap{position:relative;width:140px;height:140px}
+.drum{width:140px;height:140px;overflow:visible;display:block}
+.drum .shell{fill:var(--sheet);stroke:var(--ink);stroke-width:3}
+.drum .stand,.drum .crank{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:round}
+.drum .hub,.drum .knob{fill:var(--ink)}
+.drum .cage rect{stroke:var(--ink);stroke-width:1.5}
+.drum .cage .a{fill:var(--yellow)}.drum .cage .b{fill:var(--pink)}.drum .cage .c{fill:var(--blue)}.drum .cage .d{fill:var(--mint)}.drum .cage .e{fill:var(--orange)}
+.drum .cage,.drum .crank,.drum .knob{transform-origin:70px 60px}
+.drum{position:relative;z-index:1}
+.chip{display:none;position:absolute;left:50%;top:-8px;max-width:116px;transform:translateX(-50%);padding:5px 10px;font-size:13px;font-weight:800;line-height:1.2;border:2px solid var(--ink);border-radius:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:0}
+.chip.y{background:var(--yellow)}.chip.p{background:var(--pink)}.chip.b{background:var(--blue)}.chip.m{background:var(--mint)}.chip.o{background:var(--orange)}
+
+/* Your ticket: the bottom half folds over the top. Covered, it is paper-coloured with no name in the page at all. */
+.my-ticket{max-width:460px}
+.fold{--h:104px;--c:var(--paper);perspective:1100px}
+.fold.y{--c:var(--yellow)}.fold.p{--c:var(--pink)}.fold.b{--c:var(--blue)}.fold.m{--c:var(--mint)}.fold.o{--c:var(--orange)}.fold.n{--c:var(--paper)}
+.half{position:relative}
+.half.bottom{min-height:var(--h);transform-origin:top center;transform-style:preserve-3d}
+.face{background:var(--c)}
+.half.top .face{display:flex;min-height:104px;position:relative}
+.half.bottom .face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.half.bottom .face.front{padding:10px 18px;border-top:2px dashed var(--ink)}
+.half.bottom .face.back{transform:rotateX(180deg)}
+.half .face:before,.half .face:after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:var(--ground);z-index:1}
+.half.top .face:before{left:-8px;bottom:-8px}.half.top .face:after{right:-8px;bottom:-8px}
+.half.bottom .face.front:before{left:-8px;top:-8px}.half.bottom .face.front:after{right:-8px;top:-8px}
+.half.bottom .face.back:before,.half.bottom .face.back:after{display:none}
+.half.top .stub{width:84px;flex:none;display:grid;place-items:center;font-weight:800;font-size:40px;font-variant-numeric:tabular-nums;border-right:2px dashed var(--ink)}
+.half.top .main{flex:1;min-width:0;padding:18px 18px 14px;display:flex;flex-direction:column;justify-content:center}
+.half.top .k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.fold .name{display:block;font-size:40px;font-weight:800;line-height:1.05;letter-spacing:-.02em;overflow-wrap:anywhere;min-height:42px}
+.fold .name.long{font-size:28px}
+.fold .name.cover{width:78%;height:40px;min-height:0;margin-top:2px;border-radius:2px;background:var(--ink)}
+.half.bottom p{margin:0 0 4px;font-size:14px;font-weight:600}
+.half.bottom .to-done{margin:0}
+.hold{margin-top:14px;max-width:460px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.example .fold{max-width:420px}
+.example .half.bottom{min-height:0}
+.example .half.bottom .face.front{position:relative}
+.example p{font-size:14px;margin:14px 0 0}
+.example h2{margin-bottom:12px}
+@media(max-width:640px){
+.drumbox{grid-template-columns:1fr;justify-items:start;padding:18px}
+.half.top .stub{width:72px;font-size:26px}
+.fold .name{font-size:32px;min-height:34px}
+.fold .name.long{font-size:24px}
+.fold .name.cover{height:32px}
+.tk .name{font-size:17px}
+}
 @media(max-width:860px){
 .home,.detail{grid-template-columns:1fr;gap:32px}
 .detail{grid-template-areas:"main" "side" "after"}
@@ -230,8 +280,6 @@ h1,.home h1{font-size:26px}
 .page-head>.quiet{margin:-16px 0 0 -8px}
 .sheet{padding:18px}
 .facts>div{flex:1 1 50%;border-right:0;border-bottom:1px solid var(--rule-light)}
-.to{padding:16px}
-.to .recipient{font-size:26px}
 .facts{width:auto}
 .rem-summary>div{grid-template-columns:1fr}
 .exchanges thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
@@ -241,25 +289,26 @@ h1,.home h1{font-size:26px}
 .exchanges td[data-label]:before{content:attr(data-label) " ";color:var(--muted);font-size:14px}
 .exchanges tbody{display:block;border-top:2px solid var(--ink)}
 .row{flex-direction:column;gap:0}
-.routing .act{width:84px}
-.routing .no{width:40px}
-.routing .gift{width:96px}
 .facts>.wide{flex-basis:100%}
-.routing th,.routing td{padding:0 8px}
 }
 @media(max-width:340px){
 header{flex-wrap:wrap;padding:6px 12px}
 nav{width:100%;justify-content:space-between}
 }
+
 @media(prefers-reduced-motion:no-preference){
 button:active,.button:active{transform:translateY(1px)}
-/* The one authored moment: on first view after the draw, the TO slip rises out of the envelope and the name is written in. */
-.to.arrive{animation:slip-out .7s cubic-bezier(.16,1,.3,1) both}
-.to.arrive .to-line{animation:rule-in .6s cubic-bezier(.16,1,.3,1) .25s both}
-.to.arrive .recipient{animation:write-in 1s cubic-bezier(.33,1,.68,1) .45s both}
-.to.arrive>p,.to.arrive .to-done{animation:settle .5s ease-out 1.3s both}
+/* The one authored moment, and it is the same for everyone: the drum turns, a folded ticket slides out and unfolds. Joining drops a folded name in. */
+.drumbox.spinning .cage,.drumbox.spinning .crank,.drumbox.spinning .knob{animation:spin 1.4s cubic-bezier(.45,0,.2,1) both}
+.my-ticket.arriving{animation:slide-in .6s cubic-bezier(.16,1,.3,1) both}
+.fold.unfold{animation:grow .9s cubic-bezier(.22,1,.36,1) .55s backwards}
+.fold.unfold .half.bottom{animation:unfold .9s cubic-bezier(.22,1,.36,1) .55s backwards}
+.dropping .chip{display:block;animation:drop 2.4s ease-in .4s both}
+.dropping .drum{animation:wiggle .5s ease-out 2.6s}
 }
-@keyframes slip-out{from{transform:translateY(18px);clip-path:inset(0 0 100% 0)}to{transform:none;clip-path:inset(-12px)}}
-@keyframes settle{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(-6px)}}
-@keyframes rule-in{from{border-bottom-color:transparent}to{border-bottom-color:var(--ink)}}
-@keyframes write-in{from{clip-path:inset(-8px 100% -8px 0)}to{clip-path:inset(-8px -8px -8px 0)}}
+@keyframes spin{to{transform:rotate(720deg)}}
+@keyframes slide-in{from{transform:translateX(36px);opacity:0}to{transform:none;opacity:1}}
+@keyframes grow{from{height:var(--h)}to{height:calc(var(--h)*2)}}
+@keyframes unfold{from{transform:rotateX(180deg)}to{transform:rotateX(0)}}
+@keyframes drop{0%{opacity:0;transform:translate(-50%,-12px) scaleY(1)}15%{opacity:1;transform:translate(-50%,0) scaleY(1)}40%{opacity:1;transform:translate(-50%,0) scaleY(.5)}55%{opacity:1;transform:translate(-50%,2px) scale(.7,.5)}88%{opacity:1;transform:translate(-50%,40px) scale(.5,.35)}100%{opacity:1;transform:translate(-50%,56px) scale(.4,.3)}}
+@keyframes wiggle{25%{transform:rotate(-2.5deg)}75%{transform:rotate(2.5deg)}}

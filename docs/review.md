@@ -17,8 +17,8 @@ All of these passed on the reviewed code:
   - password hashing outside the state lock
   - abuse limits
 - Three browser suites in Chrome with Playwright, each running axe WCAG 2 A/AA and 2.1 AA checks on the pages it visits and failing on any uncaught script error:
-  - `tests/browser.cjs`: signup, invitations, a three-person draw, wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px, with no horizontal overflow.
-  - `tests/email.cjs`: confirmation, account settings, the draw email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It runs against a server with `GIFTY_SMTP_HOST=log`.
+  - `tests/browser.cjs`: signup, invitations, a three-person lock-in, each person drawing their name, the covered ticket and its keyboard reveal (no name in the page while covered), wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px, with no horizontal overflow.
+  - `tests/email.cjs`: confirmation, account settings, the draw-your-name email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It runs against a server with `GIFTY_SMTP_HOST=log`.
   - `tests/gate.cjs`: the invite-only page, refusal of direct API signups, wrong and right codes, invited guests bypassing the code, and security headers. It runs against a server with an access code set.
 - Impeccable's design detector reports no findings on `web/`.
 
