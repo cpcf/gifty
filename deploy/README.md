@@ -8,6 +8,7 @@ This is one way to run Gifty for yourself: a single small Linux server (the scri
 | --- | --- |
 | `setup.sh` | Adds swap, installs Caddy and creates the `gifty` user and directories. Safe to rerun |
 | `deploy.sh user@host` | Runs the tests, builds a Linux binary, installs it with the service, backup timer and Caddy config, and restarts Gifty. Data is not touched |
+| `set-access-code.sh user@host` | Prompts for a new `GIFTY_ACCESS_CODE` (empty removes it), updates `/etc/gifty/env` and restarts Gifty |
 | `Caddyfile` | Serves `GIFTY_DOMAIN`, gets a certificate and proxies to Gifty on 127.0.0.1:8080 |
 | `gifty.service` | Runs Gifty as the `gifty` user with `/etc/gifty/env` for configuration |
 | `gifty-backup.*` | Daily copy of the data file to `/var/lib/gifty/backups`, kept 14 days |
