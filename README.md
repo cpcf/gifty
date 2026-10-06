@@ -37,7 +37,7 @@ go build -o gifty .
 | --- | --- | --- |
 | `GIFTY_ADDR` | `127.0.0.1:8080` | Listening address |
 | `GIFTY_DATA` | `data/gifty.json` | Persistent data file |
-| `GIFTY_SECURE_COOKIES` | `false` | Set to `true` behind HTTPS |
+| `GIFTY_SECURE_COOKIES` | `true` when `GIFTY_BASE_URL` is https, else `false` | Overrides the cookie `Secure` flag |
 | `GIFTY_SMTP_HOST` | unset | SMTP server; email is off when unset. `log` prints emails to the log instead |
 | `GIFTY_SMTP_PORT` | `587` | SMTP port; the server must offer STARTTLS |
 | `GIFTY_SMTP_USER`, `GIFTY_SMTP_PASSWORD` | unset | SMTP credentials |

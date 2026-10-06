@@ -317,7 +317,8 @@ func TestWishesScopedToExchanges(t *testing.T) {
 }
 func TestAccessGate(t *testing.T) {
 	a := setup(t)
-	a.access = digest("gifty-access:" + "open sesame")
+	a.state.GateKey = "test key"
+	a.access = a.gate("open sesame")
 	c := &client{t: t, a: a}
 	cfg := c.req("GET", "config", nil, 200)
 	if cfg["gated"] != true || cfg["access"] != false {
@@ -386,11 +387,14 @@ func TestAbuseLimits(t *testing.T) {
 		c.req("POST", "exchanges", map[string]string{"Name": fmt.Sprint("Swap ", i), "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)
 	}
 	c.req("POST", "exchanges", map[string]string{"Name": "One too many", "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 400)
-	// The limiter tracks a bounded number of addresses.
+	// The limiter tracks a bounded number of addresses but still admits new ones when full.
 	for i := len(a.limits); i < 10000; i++ {
 		a.limits[fmt.Sprint("10.0.", i)] = limiter{1, time.Now().Add(time.Hour)}
 	}
-	if a.allow("203.0.113.1") {
+	if !a.allow("203.0.113.1", 30) {
+		t.Fatal("a new address was locked out of a full limiter")
+	}
+	if len(a.limits) > 10000 {
 		t.Fatal("limiter grew past its cap")
 	}
 }
@@ -507,5 +511,44 @@ func TestExchangeDeletion(t *testing.T) {
 	}
 	if reopened.state.Exchanges[id] != nil {
 		t.Fatal("deleted exchange persisted")
+	}
+}
+
+func TestWriteAndTokenLimits(t *testing.T) {
+	a := setup(t)
+	c := &client{t: t, a: a}
+	c.signup("ana")
+	// Cheap authenticated writes are throttled per client.
+	for i := 0; i < 300; i++ {
+		c.req("POST", "account", map[string]bool{"Notify": true}, 200)
+	}
+	c.req("POST", "account", map[string]bool{"Notify": true}, 429)
+	c.req("GET", "me", nil, 200)
+	// Token endpoints share the auth limiter.
+	d := &client{t: t, a: a}
+	for i := 0; i < 29; i++ { // the signup above used one of the 30
+		d.req("POST", "verify", map[string]string{"Token": "nope"}, 404)
+	}
+	d.req("POST", "verify", map[string]string{"Token": "nope"}, 429)
+}
+func TestNotificationCapAndExistingEmailNotice(t *testing.T) {
+	a := setup(t)
+	o := &outbox{}
+	a.mailer, a.base, a.from = o.send, "https://gifty.example", "Gifty <noreply@gifty.example>"
+	(&client{t: t, a: a}).signup("ana")
+	u := a.byToken(func(u *User) bool { return u.Email == "ana@example.com" })
+	u.Verified = true
+	start := len(a.state.Outbox)
+	for i := 0; i < 25; i++ {
+		a.queue(u, true, "Reminder", "body")
+	}
+	if len(a.state.Outbox)-start != 20 {
+		t.Fatalf("queued %d exchange emails, want 20", len(a.state.Outbox))
+	}
+	// Signing up again with a confirmed address is refused and tells the owner.
+	before := len(a.state.Outbox)
+	(&client{t: t, a: a}).req("POST", "signup", map[string]string{"Name": "x", "Email": "ana@example.com", "Password": "another long password"}, 400)
+	if len(a.state.Outbox) != before+1 || !strings.Contains(a.state.Outbox[before].Subject, "tried to sign up") {
+		t.Fatal("the account owner was not told")
 	}
 }

@@ -126,6 +126,16 @@ func (a *App) queue(u *User, notification bool, subject, body string) {
 	if !a.mailOn() || (notification && (!u.Verified || u.NoEmail)) {
 		return
 	}
+	if notification {
+		if day := time.Now().UTC().Format("2006-01-02"); u.NotifyDay != day {
+			u.NotifyDay, u.NotifyCount = day, 0
+		}
+		if u.NotifyCount >= 20 {
+			log.Printf("exchange email to %s not sent: daily limit reached", u.Email)
+			return
+		}
+		u.NotifyCount++
+	}
 	m := Mail{ID: token(), To: u.Email, Subject: subject, Next: time.Now()}
 	if notification {
 		if u.Unsub == "" {

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -54,6 +55,8 @@ type User struct {
 	LastMail     time.Time  `json:",omitzero"`  // last account email, for the resend cooldown
 	MailDay      string     `json:",omitempty"` // with MailCount, caps account emails per day
 	MailCount    int        `json:",omitempty"`
+	NotifyDay    string     `json:",omitempty"` // with NotifyCount, caps exchange emails per day
+	NotifyCount  int        `json:",omitempty"`
 }
 type Wish struct {
 	ID    string `json:"id"`
@@ -103,6 +106,8 @@ type State struct {
 	Exchanges map[string]*Exchange
 	Sessions  map[string]Session
 	Outbox    []Mail `json:",omitempty"`
+	// GateKey keys the access-gate cookie, so it can't be derived from the access code.
+	GateKey string `json:",omitempty"`
 }
 type limiter struct {
 	Count int
@@ -116,12 +121,13 @@ type App struct {
 	// trustProxy reads the client address from X-Forwarded-For on loopback requests, for running behind a local reverse proxy.
 	trustProxy bool
 	limits     map[string]limiter
+	swept      time.Time
 	// mailer is nil when email is not configured.
 	mailer func(to string, msg []byte) error
 	base   string
 	from   string
 	wake   chan struct{}
-	// access is the digest of GIFTY_ACCESS_CODE; empty means anyone may sign up.
+	// access is the keyed hash of GIFTY_ACCESS_CODE (see gate); empty means anyone may sign up.
 	access string
 	// admins holds the lowercased emails from GIFTY_ADMINS.
 	admins map[string]bool
@@ -137,7 +143,10 @@ type prehash struct{ salt, hash string }
 type prehashKey struct{}
 
 // authPaths are rate limited per client before the lock; signup, login and reset also hash a password.
-var authPaths = map[string]bool{"signup": true, "login": true, "reset": true, "reset/request": true, "access": true, "account/delete": true}
+var authPaths = map[string]bool{"signup": true, "login": true, "reset": true, "reset/request": true, "access": true, "account/delete": true, "verify": true}
+
+// isAuthPath includes the unauthenticated token endpoints, which scan every account.
+func isAuthPath(path string) bool { return authPaths[path] || strings.HasPrefix(path, "unsubscribe/") }
 
 type problem struct {
 	status  int
@@ -152,6 +161,13 @@ func token() string {
 		panic(err)
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// gate is the access-gate credential for code: an HMAC under the server's own key.
+func (a *App) gate(code string) string {
+	m := hmac.New(sha256.New, []byte(a.state.GateKey))
+	m.Write([]byte("gifty-access:" + code))
+	return hex.EncodeToString(m.Sum(nil))
 }
 func digest(s string) string { b := sha256.Sum256([]byte(s)); return hex.EncodeToString(b[:]) }
 func password(p, s string) string {
@@ -373,7 +389,7 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if path := strings.TrimPrefix(r.URL.Path, "/api/"); r.Method == "POST" && authPaths[path] {
+	if path := strings.TrimPrefix(r.URL.Path, "/api/"); r.Method == "POST" && isAuthPath(path) {
 		var ok bool
 		if r, ok = a.prepare(w, r, path); !ok {
 			return
@@ -381,8 +397,15 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// Roll back all in-memory changes when persistence fails.
-	before, _ := json.Marshal(a.state)
+	if r.Method == "POST" && !isAuthPath(strings.TrimPrefix(r.URL.Path, "/api/")) && !a.allow("write|"+a.clientIP(r), 300) {
+		send(w, 429, map[string]string{"error": "Too many changes at once. Try again in a few minutes."})
+		return
+	}
+	// Roll back all in-memory changes when persistence fails. Reads change nothing, so only writes pay for a snapshot.
+	var before []byte
+	if r.Method == "POST" {
+		before, _ = json.Marshal(a.state)
+	}
 	result, err := a.dispatch(w, r)
 	if err == nil && r.Method == "POST" {
 		err = a.save()
@@ -419,7 +442,7 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 	var in struct{ Email, Password string }
 	json.Unmarshal(body, &in)
 	a.mu.Lock()
-	allowed := a.allow(a.clientIP(r))
+	allowed := a.allow("auth|"+a.clientIP(r), 30)
 	salt := token()
 	if path == "account/delete" {
 		salt = "missing-account"
@@ -453,23 +476,36 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 	return r.WithContext(context.WithValue(r.Context(), prehashKey{}, prehash{salt, h})), true
 }
 
-// allow counts an attempt from ip: 30 per 15 minutes, tracking at most 10,000 addresses.
-func (a *App) allow(ip string) bool {
+// allow counts an attempt under key: max per 15 minutes. It tracks at most 10,000 keys; when full, an
+// arbitrary one is dropped so that new clients are never locked out. Expired entries are swept once a minute.
+func (a *App) allow(key string, max int) bool {
 	now := time.Now()
-	for k, l := range a.limits {
-		if now.After(l.Reset) {
-			delete(a.limits, k)
+	if now.Sub(a.swept) > time.Minute {
+		a.swept = now
+		for k, l := range a.limits {
+			if now.After(l.Reset) {
+				delete(a.limits, k)
+			}
 		}
 	}
-	l, seen := a.limits[ip]
-	if l.Count >= 30 || (!seen && len(a.limits) >= 10000) {
+	l := a.limits[key]
+	if now.After(l.Reset) {
+		l = limiter{}
+	}
+	if l.Count >= max {
 		return false
 	}
 	if l.Count == 0 {
 		l.Reset = now.Add(15 * time.Minute)
+		if _, seen := a.limits[key]; !seen && len(a.limits) >= 10000 {
+			for k := range a.limits {
+				delete(a.limits, k)
+				break
+			}
+		}
 	}
 	l.Count++
-	a.limits[ip] = l
+	a.limits[key] = l
 	return true
 }
 func (a *App) hasAccess(r *http.Request) bool {
@@ -498,7 +534,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if err := readJSON(r, &in); err != nil {
 			return nil, err
 		}
-		if a.access == "" || subtle.ConstantTimeCompare([]byte(digest("gifty-access:"+strings.TrimSpace(in.Code))), []byte(a.access)) != 1 {
+		if a.access == "" || subtle.ConstantTimeCompare([]byte(a.gate(strings.TrimSpace(in.Code))), []byte(a.access)) != 1 {
 			return nil, problem{403, "That code isn’t right."}
 		}
 		http.SetCookie(w, &http.Cookie{Name: "gifty_access", Value: a.access, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 90 * 86400})
@@ -602,6 +638,10 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				return nil, problem{403, "Enter the access code or open your invitation link first."}
 			}
 			if found != nil {
+				// Tell the owner, so a probe for their address doesn't go unnoticed.
+				if found.Verified && a.accountMailAllowed(found, now) {
+					a.queue(found, false, "Someone tried to sign up with your Gifty email", fmt.Sprintf("Hello %s,\n\nSomeone tried to create a Gifty account with this email address, which already has one. If that was you, sign in at %s/#login instead (you can reset your password from there). If it wasn’t, you can ignore this email.", found.Name, a.base))
+				}
 				return nil, bad("An account already uses that email. Sign in instead.")
 			}
 			found = &User{ID: token(), Name: in.Name, Email: in.Email, Salt: pre.salt, Hash: pre.hash, Wishes: []Wish{}}
@@ -986,6 +1026,7 @@ func (a *App) admin(path string, r *http.Request, u *User) (any, error) {
 		if err := a.removeUser(v); err != nil {
 			return nil, err
 		}
+		log.Printf("admin %s deleted account %s", u.ID, v.ID)
 		return map[string]bool{"ok": true}, nil
 	case path == "exchanges/delete" && r.Method == "POST":
 		var in struct{ ID string }
@@ -996,6 +1037,7 @@ func (a *App) admin(path string, r *http.Request, u *User) (any, error) {
 			return nil, problem{404, "Exchange not found."}
 		}
 		a.removeExchange(in.ID)
+		log.Printf("admin %s deleted exchange %s", u.ID, in.ID)
 		return map[string]bool{"ok": true}, nil
 	}
 	return nil, problem{404, "Page not found."}
@@ -1122,10 +1164,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	a.secure = os.Getenv("GIFTY_SECURE_COOKIES") == "true"
+	// Cookies are Secure whenever the public address is https; GIFTY_SECURE_COOKIES overrides that either way.
+	a.secure = strings.HasPrefix(os.Getenv("GIFTY_BASE_URL"), "https://")
+	if v := os.Getenv("GIFTY_SECURE_COOKIES"); v != "" {
+		a.secure = v == "true"
+	}
 	a.trustProxy = os.Getenv("GIFTY_TRUST_PROXY") == "true"
 	if code := strings.TrimSpace(os.Getenv("GIFTY_ACCESS_CODE")); code != "" {
-		a.access = digest("gifty-access:" + code)
+		if a.state.GateKey == "" {
+			a.state.GateKey = token()
+			if err := a.save(); err != nil {
+				log.Fatal(err)
+			}
+		}
+		a.access = a.gate(code)
 	}
 	a.admins = map[string]bool{}
 	for _, v := range strings.Split(os.Getenv("GIFTY_ADMINS"), ",") {
