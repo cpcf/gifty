@@ -22,7 +22,8 @@ An exchange is a raffle at a village fete. People are raffle tickets and your re
 - **Exchange:** facts strip, the machine box before you draw (then your reveal ticket), your recipient's wish list, the note, the ticket list of people (which shows whose gift is ready, never who it is for) and a short summary of email reminders with editors behind "Change reminders". Invitation and draw actions, or your wish-list prompt, sit in a side column that comes first on phones while the exchange is open.
 - **Invitation:** who sent it, the date, the limit and how many have joined.
 - **Wish list:** ideas grouped into "Every exchange" and one section per exchange; each idea chooses who can see it.
-- **Account:** email on or off, and reminders that apply to every exchange unless set for one.
+- **Account:** email on or off, reminders that apply to every exchange unless set for one, and account deletion (password required). Deleting removes the person from open exchanges; in a drawn exchange they stay as an empty “Deleted account” so the draw still adds up. Organisers must archive exchanges that have other people first.
+- **Admin** (only for addresses in `GIFTY_ADMINS` that are confirmed): lists accounts and exchanges and can delete either. It never shows assignments, wish lists or invitation links.
 
 ## Constraints
 

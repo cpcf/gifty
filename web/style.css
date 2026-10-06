@@ -162,6 +162,9 @@ aside p{font-size:16px}
 .invite input{font-size:16px;margin-bottom:10px}
 .invite .secondary+.secondary{margin-top:10px}
 .invite .quiet{padding-left:0;margin-top:4px}
+.admin-list{list-style:none;margin:0 0 32px;padding:0;background:var(--sheet);border:1px solid var(--rule);border-radius:3px}
+.admin-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--rule-light)}
+.admin-row:last-child{border-bottom:0}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .after{margin-top:12px}
 .after .quiet{padding-left:0}
@@ -308,6 +311,10 @@ h1,.home h1{font-size:26px}
 .exchanges tbody{display:block;border-top:2px solid var(--ink)}
 .row{flex-direction:column;gap:0}
 .facts>.wide{flex-basis:100%}
+}
+@media(max-width:480px){
+header.long-nav{flex-wrap:wrap;padding:6px 12px}
+header.long-nav nav{width:100%;justify-content:space-between}
 }
 @media(max-width:340px){
 header{flex-wrap:wrap;padding:6px 12px}

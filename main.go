@@ -123,6 +123,8 @@ type App struct {
 	wake   chan struct{}
 	// access is the digest of GIFTY_ACCESS_CODE; empty means anyone may sign up.
 	access string
+	// admins holds the lowercased emails from GIFTY_ADMINS.
+	admins map[string]bool
 	// hashSlots bounds concurrent password hashing, which takes about 300 ms of CPU each.
 	hashSlots chan struct{}
 	// hourStart and hourCount cap account emails across the whole site.
@@ -135,7 +137,7 @@ type prehash struct{ salt, hash string }
 type prehashKey struct{}
 
 // authPaths are rate limited per client before the lock; signup, login and reset also hash a password.
-var authPaths = map[string]bool{"signup": true, "login": true, "reset": true, "reset/request": true, "access": true}
+var authPaths = map[string]bool{"signup": true, "login": true, "reset": true, "reset/request": true, "access": true, "account/delete": true}
 
 type problem struct {
 	status  int
@@ -235,7 +237,55 @@ func (a *App) cookie(w http.ResponseWriter, t string, age int) {
 	http.SetCookie(w, &http.Cookie{Name: "gifty_session", Value: t, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: age})
 }
 func (a *App) publicUser(u *User) any {
-	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": u.Wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]Reminder{}, u.Reminders...)}
+	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": u.Wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]Reminder{}, u.Reminders...), "admin": a.isAdmin(u)}
+}
+
+// isAdmin needs a confirmed address, so nobody can become an administrator by signing up with an admin's email first.
+func (a *App) isAdmin(u *User) bool { return u.Verified && u.Email != "" && a.admins[u.Email] }
+
+const deletedName = "Deleted account"
+
+// removeUser deletes an account. People in drawn exchanges stay on as an empty
+// "Deleted account" so everyone else's draw still adds up; otherwise the record goes.
+func (a *App) removeUser(u *User) error {
+	for _, e := range a.state.Exchanges {
+		if e.Owner == u.ID && !e.Archived && len(e.Members) > 1 {
+			return bad("You organise “" + e.Name + "” with other people in it. Archive it first.")
+		}
+	}
+	kept := false
+	for id, e := range a.state.Exchanges {
+		if !slices.Contains(e.Members, u.ID) {
+			continue
+		}
+		if len(e.Members) == 1 {
+			delete(a.state.Exchanges, id)
+			continue
+		}
+		delete(e.MyReminders, u.ID)
+		delete(e.Reminded, u.ID)
+		e.Ready = slices.DeleteFunc(e.Ready, func(m string) bool { return m == u.ID })
+		if len(e.Assignments) == 0 {
+			e.Members = slices.DeleteFunc(e.Members, func(m string) bool { return m == u.ID })
+		} else {
+			kept = true
+		}
+		if e.Owner == u.ID {
+			kept = true // the organiser's name is still shown
+		}
+	}
+	for k, s := range a.state.Sessions {
+		if s.User == u.ID {
+			delete(a.state.Sessions, k)
+		}
+	}
+	a.state.Outbox = slices.DeleteFunc(a.state.Outbox, func(m Mail) bool { return m.To == u.Email })
+	if !kept {
+		delete(a.state.Users, u.ID)
+		return nil
+	}
+	*a.state.Users[u.ID] = User{ID: u.ID, Name: deletedName, Wishes: []Wish{}}
+	return nil
 }
 func (a *App) byToken(match func(*User) bool) *User {
 	for _, u := range a.state.Users {
@@ -361,10 +411,16 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 	a.mu.Lock()
 	allowed := a.allow(a.clientIP(r))
 	salt := token()
+	if path == "account/delete" {
+		salt = "missing-account"
+		if u := a.user(r); u != nil {
+			salt = u.Salt
+		}
+	}
 	if path == "login" {
 		salt = "missing-account"
 		email := strings.ToLower(strings.TrimSpace(in.Email))
-		if u := a.byToken(func(u *User) bool { return u.Email == email }); u != nil {
+		if u := a.byToken(func(u *User) bool { return u.Email != "" && u.Email == email }); u != nil {
 			salt = u.Salt
 		}
 	}
@@ -373,7 +429,7 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 		send(w, 429, map[string]string{"error": "Too many attempts. Try again in 15 minutes."})
 		return r, false
 	}
-	if path != "signup" && path != "login" && path != "reset" || len(in.Password) > 256 {
+	if path != "signup" && path != "login" && path != "reset" && path != "account/delete" || len(in.Password) > 256 {
 		return r, true
 	}
 	select {
@@ -479,7 +535,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			}
 			email := strings.ToLower(strings.TrimSpace(in.Email))
 			// Always answer the same way so the form can't reveal which addresses have accounts.
-			if v := a.byToken(func(v *User) bool { return v.Email == email }); v != nil && a.mailOn() && now.After(v.ResetExpires.Add(2*time.Minute-time.Hour)) {
+			if v := a.byToken(func(v *User) bool { return v.Email != "" && v.Email == email }); v != nil && a.mailOn() && now.After(v.ResetExpires.Add(2*time.Minute-time.Hour)) {
 				a.sendReset(v)
 			}
 			return map[string]bool{"ok": true}, nil
@@ -516,7 +572,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 		var found *User
 		for _, v := range a.state.Users {
-			if v.Email == in.Email {
+			if v.Email != "" && v.Email == in.Email {
 				found = v
 				break
 			}
@@ -618,6 +674,23 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		u.NoEmail = !in.Notify
 		return a.publicUser(u), nil
+	}
+	if path == "account/delete" && r.Method == "POST" {
+		pre, _ := r.Context().Value(prehashKey{}).(prehash)
+		if u.Salt != pre.salt || subtle.ConstantTimeCompare([]byte(pre.hash), []byte(u.Hash)) != 1 {
+			return nil, problem{403, "That password isn’t right."}
+		}
+		if err := a.removeUser(u); err != nil {
+			return nil, err
+		}
+		a.cookie(w, "", -1)
+		return map[string]bool{"ok": true}, nil
+	}
+	if strings.HasPrefix(path, "admin/") {
+		if !a.isAdmin(u) {
+			return nil, problem{404, "Page not found."}
+		}
+		return a.admin(strings.TrimPrefix(path, "admin/"), r, u)
 	}
 	if path == "logout" && r.Method == "POST" {
 		c, _ := r.Cookie("gifty_session")
@@ -850,6 +923,67 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	return a.exchange(e, u), nil
 }
+
+// admin serves the administrator's pages. It lists accounts and exchanges and can
+// remove them, but never exposes assignments, wish lists or invitation links.
+func (a *App) admin(path string, r *http.Request, u *User) (any, error) {
+	switch {
+	case path == "overview" && r.Method == "GET":
+		users, exchanges := []map[string]any{}, []map[string]any{}
+		for _, v := range a.state.Users {
+			if v.Email == "" {
+				continue
+			}
+			n := 0
+			for _, e := range a.state.Exchanges {
+				if slices.Contains(e.Members, v.ID) {
+					n++
+				}
+			}
+			users = append(users, map[string]any{"id": v.ID, "name": v.Name, "email": v.Email, "verified": v.Verified, "exchanges": n, "admin": a.isAdmin(v), "self": v.ID == u.ID})
+		}
+		for _, e := range a.state.Exchanges {
+			exchanges = append(exchanges, map[string]any{"id": e.ID, "name": e.Name, "date": e.Date, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members), "drawn": len(e.Assignments) > 0, "archived": e.Archived})
+		}
+		slices.SortFunc(users, func(x, y map[string]any) int {
+			return strings.Compare(strings.ToLower(x["name"].(string)), strings.ToLower(y["name"].(string)))
+		})
+		slices.SortFunc(exchanges, func(x, y map[string]any) int { return strings.Compare(y["date"].(string), x["date"].(string)) })
+		return map[string]any{"users": users, "exchanges": exchanges}, nil
+	case path == "users/delete" && r.Method == "POST":
+		var in struct{ ID string }
+		if err := readJSON(r, &in); err != nil {
+			return nil, err
+		}
+		v := a.state.Users[in.ID]
+		if v == nil || v.Email == "" {
+			return nil, problem{404, "Account not found."}
+		}
+		if v.ID == u.ID {
+			return nil, bad("Use your account page to delete your own account.")
+		}
+		if err := a.removeUser(v); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"ok": true}, nil
+	case path == "exchanges/delete" && r.Method == "POST":
+		var in struct{ ID string }
+		if err := readJSON(r, &in); err != nil {
+			return nil, err
+		}
+		if a.state.Exchanges[in.ID] == nil {
+			return nil, problem{404, "Exchange not found."}
+		}
+		delete(a.state.Exchanges, in.ID)
+		for _, v := range a.state.Users {
+			for i := range v.Wishes {
+				v.Wishes[i].Exchanges = slices.DeleteFunc(v.Wishes[i].Exchanges, func(id string) bool { return id == in.ID })
+			}
+		}
+		return map[string]bool{"ok": true}, nil
+	}
+	return nil, problem{404, "Page not found."}
+}
 func details(r *http.Request, e *Exchange) error {
 	var in struct{ Name, Date, Budget, Currency, Note string }
 	if err := readJSON(r, &in); err != nil {
@@ -976,6 +1110,12 @@ func main() {
 	a.trustProxy = os.Getenv("GIFTY_TRUST_PROXY") == "true"
 	if code := strings.TrimSpace(os.Getenv("GIFTY_ACCESS_CODE")); code != "" {
 		a.access = digest("gifty-access:" + code)
+	}
+	a.admins = map[string]bool{}
+	for _, v := range strings.Split(os.Getenv("GIFTY_ADMINS"), ",") {
+		if v = strings.ToLower(strings.TrimSpace(v)); v != "" {
+			a.admins[v] = true
+		}
 	}
 	addr := os.Getenv("GIFTY_ADDR")
 	if addr == "" {

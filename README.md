@@ -28,6 +28,7 @@ go build -o gifty .
 - Each person draws a name in the app (a short, cosmetic animation: the assignment is already made). Their ticket is covered by default, with no name in the page, until they press and hold it (keyboard and screen readers: activate to show, again to hide). The recipient's wish list stays visible under the covered ticket so it can be used while shopping, so it can show a name if an idea mentions one.
 - Personal gift suggestions with optional product links and notes; create, edit and remove ideas.
 - Recipient wish lists that stay current as ideas change.
+- Account deletion from the account page, and an admin page (for `GIFTY_ADMINS`) to remove accounts and exchanges without touching the data file.
 - Archiving, responsive layouts, keyboard-accessible dialogs and inline form errors.
 
 ## Storage and hosting
@@ -42,15 +43,16 @@ go build -o gifty .
 | `GIFTY_SMTP_USER`, `GIFTY_SMTP_PASSWORD` | unset | SMTP credentials |
 | `GIFTY_MAIL_FROM` | unset | Sender, e.g. `Gifty <noreply@gifty.example.com>` |
 | `GIFTY_BASE_URL` | unset | Public address used in email links, e.g. `https://gifty.example.com` |
+| `GIFTY_ADMINS` | unset | Comma-separated emails of administrators (confirmed address required) |
 | `GIFTY_ACCESS_CODE` | unset | When set, new accounts need this code or an open invitation link; existing accounts can always sign in |
 
 Run one server process per data file. Data is protected by a process mutex and written with a synced temporary file and atomic rename. Failed saves roll back memory. Keep the data file on a persistent local volume and back it up securely. It contains account details, password hashes, wish lists and assignments. It must never be served as a static asset. Horizontal scaling needs a shared transactional database first.
 
-For other people to use invitations, deploy the binary behind an HTTPS reverse proxy, preserve the original Host header, set secure cookies, and open Gifty at its public hostname before copying links. A loopback invitation only works on your own computer. Set `GIFTY_ADDR=0.0.0.0:8080` when a container or remote proxy needs access. The `deploy/` directory holds the configuration for the author's own instance; change the hostname in `deploy/Caddyfile`, `deploy/deploy.sh` and `deploy/env.example` for yours.
+For other people to use invitations, deploy the binary behind an HTTPS reverse proxy, preserve the original Host header, set secure cookies, and open Gifty at its public hostname before copying links. A loopback invitation only works on your own computer. Set `GIFTY_ADDR=0.0.0.0:8080` when a container or remote proxy needs access. [deploy/README.md](deploy/README.md) describes one way to do this.
 
 Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Session tokens are random and stored as SHA-256 digests. Cookies are HttpOnly and SameSite=Lax. The server checks write origins, limits authentication attempts, bounds request bodies, escapes rendered user content and sends a restrictive content security policy. The authentication limiter uses the connection IP; a reverse proxy shares that limit unless deployed with suitable edge rate limiting and a trusted client-IP design.
 
-Email addresses identify accounts. With email on, Gifty sends a confirmation link at signup, password-reset links, a notice when it is time to draw a name and reminders before the exchange. Reminders are any number of days, weeks or calendar months before the date (up to 8). The organiser sets each exchange’s default (a week and the day before unless changed); each person can set their own for every exchange on their account page or for one exchange on its page, and ticking “I’ve got my gift” stops reminders for that exchange. Wish-list ideas can be shown in every exchange or only in chosen ones; givers only see ideas meant for their exchange. Exchange emails go only to confirmed addresses, never name a recipient and carry a one-click unsubscribe link. Messages are queued in the data file in the same save as the change that caused them, sent in the background and retried with backoff. Try it locally with `GIFTY_SMTP_HOST=log go run .`. Invitations are still shared manually. Exchange exclusions and gift reservations are outside this version. The administrator can read stored assignments; privacy is enforced between app users, not against the server operator.
+Email addresses identify accounts. With email on, Gifty sends a confirmation link at signup, password-reset links, a notice when it is time to draw a name and reminders before the exchange. Reminders are any number of days, weeks or calendar months before the date (up to 8). The organiser sets each exchange’s default (a week and the day before unless changed); each person can set their own for every exchange on their account page or for one exchange on its page, and ticking “I’ve got my gift” stops reminders for that exchange. Wish-list ideas can be shown in every exchange or only in chosen ones; givers only see ideas meant for their exchange. Exchange emails go only to confirmed addresses, never name a recipient and carry a one-click unsubscribe link. Messages are queued in the data file in the same save as the change that caused them, sent in the background and retried with backoff. Try it locally with `GIFTY_SMTP_HOST=log go run .`. Invitations are still shared manually. Exchange exclusions and gift reservations are outside this version. The server operator can read stored assignments (the admin page never shows them); privacy is enforced between app users, not against the server operator.
 
 ## Verify
 
@@ -79,3 +81,7 @@ node tests/browser.cjs
 ```
 
 `GIFTY_TEST_URL` overrides the test server URL. `GIFTY_SCREENSHOTS` sets the output directory. The browser test creates accounts and exchanges; only run it against disposable data.
+
+## Licence
+
+MIT; see [LICENSE](LICENSE). Public Sans keeps its own licence (`web/public-sans-OFL.txt`).

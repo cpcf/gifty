@@ -16,9 +16,10 @@ All of these passed on the reviewed code:
   - the access gate
   - password hashing outside the state lock
   - abuse limits
-- Three browser suites in Chrome with Playwright, each running axe WCAG 2 A/AA and 2.1 AA checks on the pages it visits and failing on any uncaught script error:
+- Four browser suites in Chrome with Playwright, each running axe WCAG 2 A/AA and 2.1 AA checks on the pages it visits and failing on any uncaught script error:
   - `tests/browser.cjs`: signup, invitations, closing entries with three people, each person drawing a name, the covered ticket and its keyboard reveal (no name in the page while covered), wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px, with no horizontal overflow.
   - `tests/email.cjs`: confirmation, account settings, the draw-a-name email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It runs against a server with `GIFTY_SMTP_HOST=log`.
+  - `tests/admin.cjs`: the admin page (hidden until the admin address is confirmed and from everyone else), removing an account, and deleting your own account with a wrong and a right password. It runs against a server with `GIFTY_SMTP_HOST=log` and `GIFTY_ADMINS=boss@example.com` and a fresh data file.
   - `tests/gate.cjs`: the invite-only page, refusal of direct API signups, wrong and right codes, invited guests bypassing the code, and security headers. It runs against a server with an access code set.
 - Impeccable's design detector reports no findings on `web/`.
 
@@ -62,12 +63,10 @@ Checked and unchanged:
 Accepted for now:
 
 - Signup reveals whether an email already has an account; with the access gate on, only people past it can probe.
-- SSH is reachable from any address, though key-only.
-- There is no way to delete an account; add one before wider use.
 
 ## Deployment
 
-Live at https://gifty.connorfleming.co.uk on AWS Lightsail with Amazon SES; see [deploy/README.md](../deploy/README.md). New accounts need the access code or an invitation link. SES production access has been granted, so mail reaches any recipient.
+See [deploy/README.md](../deploy/README.md) for a reference deployment on a small Linux server with Caddy and Amazon SES. Set `GIFTY_ACCESS_CODE` for an invite-only instance.
 
 ## Boundaries
 

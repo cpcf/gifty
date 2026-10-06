@@ -1,37 +1,32 @@
 # Deploying Gifty
 
-Gifty runs at https://gifty.connorfleming.co.uk on one Lightsail instance in eu-west-2 (AWS CLI profile `gifty`). Caddy terminates HTTPS and proxies to Gifty on 127.0.0.1:8080. Email goes through Amazon SES.
+This is one way to run Gifty for yourself: a single small Linux server (the scripts assume an AWS Lightsail Ubuntu 24.04 instance, but any Ubuntu host works), Caddy for HTTPS, and Amazon SES for email. Use whatever you like; none of it is required, and Gifty also runs fine with `go run .`.
 
-## Everyday deploy
+## What the scripts do
 
-```sh
-deploy/deploy.sh ubuntu@gifty.connorfleming.co.uk
-```
-
-It runs the tests, builds a Linux binary, copies it with the service, backup timer and Caddy config, and restarts Gifty. Data is not touched.
-
-## What exists
-
-| Piece | Where |
+| Piece | Details |
 | --- | --- |
-| Server | Lightsail `gifty` (`nano_3_0`, Ubuntu 24.04), static IP `gifty-ip`, ports 22/80/443, daily snapshots at 02:00 UTC |
-| SSH | `ubuntu@gifty.connorfleming.co.uk` with `~/.ssh/id_ed25519` (Lightsail key pair `gifty-ed25519`) |
-| Data | `/var/lib/gifty/gifty.json`; daily copies in `/var/lib/gifty/backups` kept 14 days (`gifty-backup.timer`) |
-| Config and secrets | `/etc/gifty/env` (root:gifty, 640); see `env.example`. Not in the repository |
-| DNS | Route 53 zone `gifty.connorfleming.co.uk`, delegated by four NS records named `gifty` in Squarespace. The rest of connorfleming.co.uk stays at Squarespace |
-| Records | `A` app; three DKIM `CNAME`s; `MX` and SPF `TXT` on `mail.gifty…` (MAIL FROM); `TXT` `_dmarc.gifty…` (`p=none`) |
-| Email | SES identity `gifty.connorfleming.co.uk`, sender `noreply@gifty.connorfleming.co.uk`; production access granted (no recipient verification needed); IAM user `gifty-ses-smtp` may only send from that address |
-| Bounces and complaints | Account suppression list; SNS topic `gifty-ses-feedback` emails the owner |
-| Cost alert | Budget "Gifty monthly", $10 |
+| `setup.sh` | Adds swap, installs Caddy and creates the `gifty` user and directories. Safe to rerun |
+| `deploy.sh user@host` | Runs the tests, builds a Linux binary, installs it with the service, backup timer and Caddy config, and restarts Gifty. Data is not touched |
+| `Caddyfile` | Serves `GIFTY_DOMAIN`, gets a certificate and proxies to Gifty on 127.0.0.1:8080 |
+| `gifty.service` | Runs Gifty as the `gifty` user with `/etc/gifty/env` for configuration |
+| `gifty-backup.*` | Daily copy of the data file to `/var/lib/gifty/backups`, kept 14 days |
+| `env.example` | Every setting the server reads; copy to `/etc/gifty/env` (root:gifty, mode 640) and never commit the real file |
 
-## Rebuilding from scratch
+## Setting up
 
-1. `aws lightsail create-instances … --blueprint-id ubuntu_24_04 --bundle-id nano_3_0 --user-data file://deploy/setup.sh`, then attach a static IP and open ports 22, 80 and 443. `setup.sh` adds swap (the 512 MB plan runs out of memory during upgrades without it), installs Caddy and creates the `gifty` user and directories. It is safe to rerun: `ssh ubuntu@host sudo sh -s < deploy/setup.sh`.
-2. Point the `A` record at the static IP.
-3. Write `/etc/gifty/env` from `env.example`. The SMTP password is derived from the IAM access key with the SES SigV4 algorithm for eu-west-2.
-4. Run `deploy/deploy.sh`. Caddy gets a certificate once DNS resolves.
-5. Restore data by stopping Gifty, copying a backup to `/var/lib/gifty/gifty.json` (owner `gifty`, mode 600) and starting it again.
+1. Create a server, point a DNS `A` record for your domain at it, and open ports 80 and 443. Open port 22 only to the addresses you administer from.
+2. Run `ssh user@host sudo sh -s < deploy/setup.sh`.
+3. Write `/etc/gifty/env` from `env.example`: set `GIFTY_DOMAIN`, `GIFTY_BASE_URL`, `GIFTY_MAIL_FROM`, the SMTP credentials and, if you want a private instance, `GIFTY_ACCESS_CODE`.
+4. Run `deploy/deploy.sh user@host`. Caddy gets a certificate once DNS resolves.
+5. To restore data, stop Gifty, copy a backup to `/var/lib/gifty/gifty.json` (owner `gifty`, mode 600) and start it again.
 
-## Still to do
+## Email with Amazon SES
 
-- Once mail has been arriving reliably for a while, tighten DMARC to `p=quarantine`.
+Verify a domain identity, publish the DKIM records it gives you, and set a custom MAIL FROM domain, SPF and a DMARC record. New SES accounts start in the sandbox, where mail only reaches verified addresses; request production access before inviting people. Create an IAM user allowed to `ses:SendRawEmail` only from your sender address, and derive the SMTP password from its access key with the SES SigV4 algorithm for your region. Set up bounce and complaint notifications (an SNS topic that emails you works), and once mail flows reliably consider tightening DMARC from `p=none` to `p=quarantine`.
+
+Any other SMTP provider that offers STARTTLS works with the same settings.
+
+## Administrators
+
+List administrator email addresses in `GIFTY_ADMINS`. An administrator must have a confirmed email address, so email must be on. They get an Admin page to remove accounts and exchanges. It never shows who is buying for whom.

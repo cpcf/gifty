@@ -1,4 +1,5 @@
-gifty.connorfleming.co.uk {
+# GIFTY_DOMAIN comes from /etc/gifty/env (see deploy/caddy-env.conf).
+{$GIFTY_DOMAIN} {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy 127.0.0.1:8080
