@@ -181,11 +181,11 @@ func TestOneClickUnsubscribe(t *testing.T) {
 	a.queue(u, true, "Test", "Body")
 	m := lastMail(t, a, "ana@example.com")
 	msg := string(a.message(m))
-	if !strings.Contains(msg, "List-Unsubscribe: <https://gifty.example/api/unsubscribe/"+u.Unsub+">") || !strings.Contains(msg, "List-Unsubscribe-Post: List-Unsubscribe=One-Click") {
+	if !strings.Contains(msg, "List-Unsubscribe: <https://gifty.example/api/unsubscribe/"+a.unsubToken(u)+">") || !strings.Contains(msg, "List-Unsubscribe-Post: List-Unsubscribe=One-Click") {
 		t.Fatalf("missing unsubscribe headers:\n%s", msg)
 	}
 	// Mail providers post a form, not JSON, and send no Origin.
-	r := httptest.NewRequest("POST", "/api/unsubscribe/"+u.Unsub, strings.NewReader("List-Unsubscribe=One-Click"))
+	r := httptest.NewRequest("POST", "/api/unsubscribe/"+a.unsubToken(u), strings.NewReader("List-Unsubscribe=One-Click"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	a.handler().ServeHTTP(w, r)

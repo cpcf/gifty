@@ -9,6 +9,9 @@ await p.goto(base);await p.getByRole('heading',{name:'Gifty is invite-only for n
 await p.goto(base+'/#signup');await p.getByRole('heading',{name:'Gifty is invite-only for now'}).waitFor();
 // The API refuses signup without access, whatever the page shows.
 const direct=await p.evaluate(async()=>(await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'x',email:'x@example.com',password:'a long enough password'})})).status);assert.equal(direct,403);
+// Signing in needs the code too, in the page and at the API.
+await p.goto(base+'/#login');await p.getByRole('heading',{name:'Gifty is invite-only for now'}).waitFor();
+const directLogin=await p.evaluate(async()=>(await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'x@example.com',password:'a long enough password'})})).status);assert.equal(directLogin,403);
 await p.getByLabel('Access code',{exact:true}).fill('wrong code');await p.getByRole('button',{name:'Continue'}).click();await p.getByText('That code isn’t right.').waitFor();
 await p.getByLabel('Access code',{exact:true}).fill('test gate code');await p.getByRole('button',{name:'Continue'}).click();await p.getByRole('heading',{name:'Create an account'}).waitFor();
 await p.getByLabel('Your name').fill('Ana');await p.getByLabel('Email address').fill('ana'+Date.now()+'@example.com');await p.getByLabel('Password',{exact:true}).fill('a long enough password');await p.getByRole('button',{name:'Create an account'}).click();await p.getByRole('heading',{name:'Exchanges',exact:true}).waitFor();

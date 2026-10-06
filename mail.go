@@ -138,11 +138,8 @@ func (a *App) queue(u *User, notification bool, subject, body string) {
 	}
 	m := Mail{ID: token(), To: u.Email, Subject: subject, Next: time.Now()}
 	if notification {
-		if u.Unsub == "" {
-			u.Unsub = token()
-		}
-		m.Unsub = u.Unsub
-		m.Body = body + "\n\n--\nYou’re getting this because you’re taking part in a gift exchange on Gifty.\nStop these emails: " + a.base + "/#unsubscribe/" + u.Unsub + "\n"
+		m.Unsub = a.unsubToken(u)
+		m.Body = body + "\n\n--\nYou’re getting this because you’re taking part in a gift exchange on Gifty.\nStop these emails: " + a.base + "/#unsubscribe/" + m.Unsub + "\n"
 	} else {
 		m.Body = body + "\n\n--\nGifty, " + a.base + "\n"
 		// Only account emails count towards the confirmation resend cooldown.

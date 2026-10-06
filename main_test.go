@@ -17,7 +17,8 @@ import (
 type client struct {
 	t      *testing.T
 	a      *App
-	cookie *http.Cookie
+	cookie *http.Cookie // the session
+	access *http.Cookie // the access-gate cookie
 }
 
 func (c *client) req(method, path string, data any, status int) map[string]any {
@@ -28,8 +29,12 @@ func (c *client) req(method, path string, data any, status int) map[string]any {
 	}
 	r := httptest.NewRequest(method, "/api/"+path, &b)
 	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	if c.cookie != nil {
 		r.AddCookie(c.cookie)
+	}
+	if c.access != nil {
+		r.AddCookie(c.access)
 	}
 	w := httptest.NewRecorder()
 	c.a.handler().ServeHTTP(w, r)
@@ -37,7 +42,11 @@ func (c *client) req(method, path string, data any, status int) map[string]any {
 		c.t.Fatalf("%s %s: got %d want %d: %s", method, path, w.Code, status, w.Body.String())
 	}
 	for _, k := range w.Result().Cookies() {
-		c.cookie = k
+		if k.Name == "gifty_access" {
+			c.access = k
+		} else {
+			c.cookie = k
+		}
 	}
 	var result map[string]any
 	if w.Body.Bytes()[0] == '{' {
@@ -317,7 +326,7 @@ func TestWishesScopedToExchanges(t *testing.T) {
 }
 func TestAccessGate(t *testing.T) {
 	a := setup(t)
-	a.state.GateKey = "test key"
+	a.key = []byte("test key")
 	a.access = a.gate("open sesame")
 	c := &client{t: t, a: a}
 	cfg := c.req("GET", "config", nil, 200)
@@ -328,8 +337,8 @@ func TestAccessGate(t *testing.T) {
 	c.req("POST", "signup", signup, 403)
 	c.req("POST", "access", map[string]string{"Code": "wrong"}, 403)
 	c.req("POST", "access", map[string]string{"Code": " open sesame "}, 200)
-	if c.cookie.Name != "gifty_access" || strings.Contains(c.cookie.Value, "sesame") || !c.cookie.HttpOnly {
-		t.Fatalf("access cookie %+v", c.cookie)
+	if c.access == nil || strings.Contains(c.access.Value, "sesame") || !c.access.HttpOnly {
+		t.Fatalf("access cookie %+v", c.access)
 	}
 	if c.req("GET", "config", nil, 200)["access"] != true {
 		t.Fatal("access not remembered")
@@ -340,8 +349,198 @@ func TestAccessGate(t *testing.T) {
 	b := &client{t: t, a: a}
 	b.req("POST", "signup", map[string]string{"Name": "ben", "Email": "ben@example.com", "Password": "correct horse battery staple", "Invite": "made-up"}, 403)
 	b.req("POST", "signup", map[string]string{"Name": "ben", "Email": "ben@example.com", "Password": "correct horse battery staple", "Invite": e["invite"].(string)}, 200)
-	// Existing accounts can always sign in.
-	(&client{t: t, a: a}).req("POST", "login", map[string]string{"Email": "ana@example.com", "Password": "correct horse battery staple"}, 200)
+	// Signing in needs the gate too, but an invited guest was let past it when they joined, and a password reset is another way back in.
+	login := map[string]string{"Email": "ana@example.com", "Password": "correct horse battery staple"}
+	(&client{t: t, a: a}).req("POST", "login", login, 403)
+	if b.access == nil {
+		t.Fatal("an invited guest was not given the access cookie")
+	}
+	b.req("POST", "logout", nil, 200)
+	b.req("POST", "login", map[string]string{"Email": "ben@example.com", "Password": "correct horse battery staple"}, 200)
+	(&client{t: t, a: a, access: c.access}).req("POST", "login", login, 200)
+}
+
+// Without the gate, a login or signup is refused before any password is hashed, so anonymous callers can't
+// keep the hashing slots busy.
+func TestGatedRequestsSkipHashing(t *testing.T) {
+	a := setup(t)
+	a.key = []byte("test key")
+	a.access = a.gate("open sesame")
+	a.hashSlots <- struct{}{}
+	a.hashSlots <- struct{}{} // both slots taken: anything that tried to hash would wait
+	c := &client{t: t, a: a}
+	start := time.Now()
+	c.req("POST", "login", map[string]string{"Email": "nobody@example.com", "Password": "whatever it is"}, 403)
+	c.req("POST", "signup", map[string]string{"Name": "x", "Email": "x@example.com", "Password": "a long enough password"}, 403)
+	c.req("POST", "reset", map[string]string{"Token": "made-up", "Password": "a long enough password"}, 404)
+	c.req("POST", "account/delete", map[string]string{"Password": "whatever it is"}, 401)
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("refusals took %v: they waited for a hashing slot", d)
+	}
+}
+
+func TestAccessCodeGuessesShareOneBudget(t *testing.T) {
+	a := setup(t)
+	a.key = []byte("test key")
+	a.access = a.gate("open sesame")
+	for i := 0; i < 20; i++ {
+		// Every guess comes from a different address, so only the site-wide budget can stop them.
+		r := httptest.NewRequest("POST", "/api/access", strings.NewReader(`{"Code":"guess"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Sec-Fetch-Site", "same-origin")
+		r.RemoteAddr = fmt.Sprintf("203.0.113.%d:1234", i+1)
+		w := httptest.NewRecorder()
+		a.handler().ServeHTTP(w, r)
+		if w.Code != 403 {
+			t.Fatalf("guess %d: %d", i, w.Code)
+		}
+	}
+	c := &client{t: t, a: a}
+	c.req("POST", "access", map[string]string{"Code": "open sesame"}, 429)
+	a.gateFails = limiter{}
+	c.req("POST", "access", map[string]string{"Code": "open sesame"}, 200)
+}
+
+func TestAccountLockout(t *testing.T) {
+	a := setup(t)
+	(&client{t: t, a: a}).signup("ana")
+	c := &client{t: t, a: a}
+	wrong := map[string]string{"Email": "ana@example.com", "Password": "not the password"}
+	for i := 0; i < 10; i++ {
+		c.req("POST", "login", wrong, 401)
+		a.limits = map[string]limiter{} // each guess from a fresh address
+	}
+	// Past ten tries the account refuses even the right password, without hashing it.
+	right := map[string]string{"Email": "ana@example.com", "Password": "correct horse battery staple"}
+	c.req("POST", "login", right, 429)
+	// Another account is unaffected.
+	(&client{t: t, a: a}).signup("ben")
+	c.req("POST", "login", map[string]string{"Email": "ben@example.com", "Password": "correct horse battery staple"}, 200)
+	// The window ends, and a good login clears the count.
+	u := a.byToken(func(u *User) bool { return u.Email == "ana@example.com" })
+	a.fails[u.ID] = limiter{10, time.Now().Add(-time.Second)}
+	c.req("POST", "login", right, 200)
+	if _, ok := a.fails[u.ID]; ok {
+		t.Fatal("a successful login did not clear the failure count")
+	}
+}
+
+func TestPostsMustSayWhereTheyCameFrom(t *testing.T) {
+	a := setup(t)
+	post := func(headers map[string]string) int {
+		r := httptest.NewRequest("POST", "/api/logout", strings.NewReader("{}"))
+		r.Header.Set("Content-Type", "application/json")
+		for k, v := range headers {
+			r.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		a.handler().ServeHTTP(w, r)
+		return w.Code
+	}
+	for name, h := range map[string]map[string]string{
+		"no headers":        {},
+		"same-site":         {"Sec-Fetch-Site": "same-site"},
+		"cross-site":        {"Sec-Fetch-Site": "cross-site"},
+		"foreign origin":    {"Origin": "https://evil.test", "Sec-Fetch-Site": "same-origin"},
+		"opaque origin":     {"Origin": "null"},
+		"origin, cross":     {"Origin": "http://example.com", "Sec-Fetch-Site": "cross-site"},
+		"sibling subdomain": {"Origin": "http://evil.example.com", "Sec-Fetch-Site": "same-site"},
+	} {
+		if code := post(h); code != 403 {
+			t.Errorf("%s: got %d, want 403", name, code)
+		}
+	}
+	for name, h := range map[string]map[string]string{
+		"same-origin": {"Sec-Fetch-Site": "same-origin"},
+		"typed in":    {"Sec-Fetch-Site": "none"},
+		"our origin":  {"Origin": "http://example.com"},
+	} {
+		if code := post(h); code == 403 {
+			t.Errorf("%s was refused", name)
+		}
+	}
+}
+
+func TestResetRecoversAnAddressSquatterHolds(t *testing.T) {
+	a, _ := mailSetup(t)
+	a.admins = map[string]bool{"ana@example.com": true}
+	// Someone signs up with the administrator's address first, and can never confirm it.
+	squatter := &client{t: t, a: a}
+	squatter.signup("ana")
+	u := a.byToken(func(u *User) bool { return u.Email == "ana@example.com" })
+	if a.isAdmin(u) {
+		t.Fatal("an unconfirmed address was treated as administrator")
+	}
+	// The real owner takes the account over through a password reset, which proves the inbox.
+	(&client{t: t, a: a}).req("POST", "reset/request", map[string]string{"Email": "ana@example.com"}, 200)
+	var tok string
+	for _, m := range a.state.Outbox {
+		if i := strings.Index(m.Body, "#reset/"); i >= 0 {
+			tok = strings.Fields(m.Body[i+len("#reset/"):])[0]
+		}
+	}
+	owner := &client{t: t, a: a}
+	owner.req("POST", "reset", map[string]string{"Token": tok, "Password": "the owner's new password"}, 200)
+	if !a.isAdmin(u) {
+		t.Fatal("the owner could not become administrator after resetting")
+	}
+	squatter.req("GET", "me", nil, 401)
+}
+
+func TestKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gifty.json")
+	a, err := openApp(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The secret lives beside the data file, never in it, and is private to the service user.
+	if fi, err := os.Stat(filepath.Join(dir, "gifty.key")); err != nil || fi.Mode().Perm() != 0600 {
+		t.Fatalf("key file %v %v", fi, err)
+	}
+	a.state.Users["x"] = &User{ID: "x", Name: "x"}
+	if err := a.save(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); strings.Contains(string(b), string(a.key)) {
+		t.Fatal("the key is in the data file")
+	}
+	// It survives a restart, so access cookies and unsubscribe links keep working.
+	b, err := openApp(path)
+	if err != nil || string(b.key) != string(a.key) {
+		t.Fatalf("reopen: %v", err)
+	}
+	os.WriteFile(filepath.Join(dir, "gifty.key"), []byte("short\n"), 0600)
+	if _, err := openApp(path); err == nil {
+		t.Fatal("a damaged key file was accepted")
+	}
+}
+
+func TestLimiterEvictsTheEntryNearestExpiry(t *testing.T) {
+	a := setup(t)
+	now := time.Now()
+	for i := 0; i < 10000; i++ {
+		a.limits[fmt.Sprint("k", i)] = limiter{1, now.Add(time.Hour + time.Duration(i)*time.Second)}
+	}
+	a.limits["soonest"] = limiter{1, now.Add(time.Minute)}
+	delete(a.limits, "k9999")
+	if !a.allow("new", 30) {
+		t.Fatal("a new key was refused")
+	}
+	if _, ok := a.limits["soonest"]; ok {
+		t.Fatal("evicted something other than the entry nearest expiry")
+	}
+	if len(a.limits) != 10000 {
+		t.Fatalf("limiter holds %d keys", len(a.limits))
+	}
+	// IPv6 callers share a limit across their /64.
+	r := httptest.NewRequest("GET", "/", nil)
+	r.RemoteAddr = "[2001:db8:1:2:aaaa:bbbb:cccc:dddd]:1"
+	r2 := httptest.NewRequest("GET", "/", nil)
+	r2.RemoteAddr = "[2001:db8:1:2::1]:1"
+	if a.clientIP(r) != a.clientIP(r2) {
+		t.Fatal("addresses in one /64 are limited separately")
+	}
 }
 func TestHashingDoesNotHoldTheLock(t *testing.T) {
 	a := setup(t)

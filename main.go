@@ -48,7 +48,6 @@ type User struct {
 	ResetHash     string    `json:",omitempty"`
 	ResetExpires  time.Time `json:",omitzero"`
 	NoEmail       bool      `json:",omitempty"`
-	Unsub         string    `json:",omitempty"`
 	// OwnReminders means Reminders replaces each organiser's default in every exchange.
 	OwnReminders bool       `json:",omitempty"`
 	Reminders    []Reminder `json:",omitempty"`
@@ -106,13 +105,27 @@ type State struct {
 	Exchanges map[string]*Exchange
 	Sessions  map[string]Session
 	Outbox    []Mail `json:",omitempty"`
-	// GateKey keys the access-gate cookie, so it can't be derived from the access code.
-	GateKey string `json:",omitempty"`
 }
 type limiter struct {
 	Count int
 	Reset time.Time
 }
+
+// take counts one attempt in a 15-minute window and reports whether it was within max.
+func (l *limiter) take(now time.Time, max int) bool {
+	if now.After(l.Reset) {
+		*l = limiter{}
+	}
+	if l.Count >= max {
+		return false
+	}
+	if l.Count == 0 {
+		l.Reset = now.Add(15 * time.Minute)
+	}
+	l.Count++
+	return true
+}
+
 type App struct {
 	mu     sync.Mutex
 	state  State
@@ -122,6 +135,13 @@ type App struct {
 	trustProxy bool
 	limits     map[string]limiter
 	swept      time.Time
+	// fails counts login attempts per account, and gateFails wrong access codes across the whole site.
+	// Both are bounded (by the number of accounts, and by one) so flooding them with other keys can't reset them.
+	fails     map[string]limiter
+	gateFails limiter
+	// key is the server secret in gifty.key, kept out of the data file and its backups. It keys the access-gate
+	// cookie and the unsubscribe links.
+	key []byte
 	// mailer is nil when email is not configured.
 	mailer func(to string, msg []byte) error
 	base   string
@@ -131,7 +151,8 @@ type App struct {
 	access string
 	// admins holds the lowercased emails from GIFTY_ADMINS.
 	admins map[string]bool
-	// hashSlots bounds concurrent password hashing, which takes about 300 ms of CPU each.
+	// hashSlots bounds concurrent password hashing, which takes about 300 ms of CPU each. Requests only reach it
+	// once they are past the access gate and have a plausible target, so it can't be filled anonymously.
 	hashSlots chan struct{}
 	// hourStart and hourCount cap account emails across the whole site.
 	hourStart time.Time
@@ -165,10 +186,21 @@ func token() string {
 
 // gate is the access-gate credential for code: an HMAC under the server's own key.
 func (a *App) gate(code string) string {
-	m := hmac.New(sha256.New, []byte(a.state.GateKey))
-	m.Write([]byte("gifty-access:" + code))
+	return a.mac("gifty-access:" + code)
+}
+
+// mac is an HMAC of s under the server key.
+func (a *App) mac(s string) string {
+	m := hmac.New(sha256.New, a.key)
+	m.Write([]byte(s))
 	return hex.EncodeToString(m.Sum(nil))
 }
+
+// unsubToken is the unsubscribe credential in u's emails. It is derived, so it isn't stored anywhere.
+func (a *App) unsubToken(u *User) string { return a.mac("gifty-unsub:" + u.ID) }
+
+// same compares two secrets in constant time.
+func same(a, b string) bool  { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
 func digest(s string) string { b := sha256.Sum256([]byte(s)); return hex.EncodeToString(b[:]) }
 func password(p, s string) string {
 	b, err := pbkdf2.Key(sha256.New, p, []byte(s), 600000, 32)
@@ -178,7 +210,7 @@ func password(p, s string) string {
 	return hex.EncodeToString(b)
 }
 func openApp(path string) (*App, error) {
-	a := &App{path: path, limits: map[string]limiter{}, hashSlots: make(chan struct{}, 2), state: State{Users: map[string]*User{}, Exchanges: map[string]*Exchange{}, Sessions: map[string]Session{}}}
+	a := &App{path: path, limits: map[string]limiter{}, fails: map[string]limiter{}, hashSlots: make(chan struct{}, 2), state: State{Users: map[string]*User{}, Exchanges: map[string]*Exchange{}, Sessions: map[string]Session{}}}
 	b, err := os.ReadFile(path)
 	if err == nil {
 		err = json.Unmarshal(b, &a.state)
@@ -189,7 +221,53 @@ func openApp(path string) (*App, error) {
 	if a.state.Users == nil || a.state.Exchanges == nil || a.state.Sessions == nil {
 		return nil, errors.New("invalid data file")
 	}
+	if err := a.loadKey(); err != nil {
+		return nil, err
+	}
 	return a, nil
+}
+
+// loadKey reads the server secret from gifty.key beside the data file, creating it on first run.
+func (a *App) loadKey() error {
+	if a.path == "" {
+		a.key = []byte(token())
+		return nil
+	}
+	dir := filepath.Dir(a.path)
+	kp := filepath.Join(dir, "gifty.key")
+	b, err := os.ReadFile(kp)
+	if err == nil {
+		if a.key = bytes.TrimSpace(b); len(a.key) < 32 {
+			return errors.New("gifty.key is damaged")
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return err
+	}
+	k := token()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".gifty-key-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err = f.WriteString(k + "\n"); err == nil {
+		err = f.Sync()
+	}
+	if ce := f.Close(); err == nil {
+		err = ce
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), kp)
+	}
+	if err != nil {
+		return err
+	}
+	a.key = []byte(k)
+	return nil
 }
 func (a *App) save() error {
 	if a.path == "" {
@@ -259,6 +337,13 @@ func (a *App) publicUser(u *User) any {
 // isAdmin needs a confirmed address, so nobody can become an administrator by signing up with an admin's email first.
 func (a *App) isAdmin(u *User) bool { return u.Verified && u.Email != "" && a.admins[u.Email] }
 
+// Site-wide ceilings, far above what friends and family need, so the data file and the work done on every
+// save stay bounded however it is used.
+const (
+	maxUsers     = 2000
+	maxExchanges = 5000
+)
+
 const deletedName = "Deleted account"
 
 // removeUser deletes an account. People in drawn exchanges stay on as an empty
@@ -321,7 +406,17 @@ func (a *App) byToken(match func(*User) bool) *User {
 	}
 	return nil
 }
+
+// clientIP is the caller's address for rate limiting. IPv6 callers are keyed by their /64, since one
+// subscriber can use any address in it.
 func (a *App) clientIP(r *http.Request) string {
+	ip := a.rawIP(r)
+	if p := net.ParseIP(ip); p != nil && p.To4() == nil {
+		return p.Mask(net.CIDRMask(64, 128)).String()
+	}
+	return ip
+}
+func (a *App) rawIP(r *http.Request) string {
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if a.trustProxy && net.ParseIP(ip).IsLoopback() {
 		// The proxy appends the address it saw, so the last entry is the one it vouches for.
@@ -369,6 +464,17 @@ func (a *App) exchange(e *Exchange, u *User) any {
 	}
 	return v
 }
+
+// sameOrigin accepts a POST that names our own origin, or that the browser says came from the page itself
+// (or from no page, like a bookmark). A POST that says nothing, or "same-site" or "cross-site", is refused.
+func sameOrigin(r *http.Request) bool {
+	if o := r.Header.Get("Origin"); o != "" {
+		p, err := url.Parse(o)
+		return err == nil && p.Host == r.Host && r.Header.Get("Sec-Fetch-Site") != "cross-site"
+	}
+	site := r.Header.Get("Sec-Fetch-Site")
+	return site == "same-origin" || site == "none"
+}
 func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
@@ -376,18 +482,11 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 		send(w, 405, map[string]string{"error": "Method not allowed."})
 		return
 	}
-	if r.Method == "POST" {
-		if o := r.Header.Get("Origin"); o != "" {
-			p, err := url.Parse(o)
-			if err != nil || p.Host != r.Host {
-				send(w, 403, map[string]string{"error": "Open Gifty and try again."})
-				return
-			}
-		}
-		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-			send(w, 403, map[string]string{"error": "Open Gifty and try again."})
-			return
-		}
+	// Browsers always say where a POST came from. Mail providers' one-click unsubscribe is the one
+	// legitimate cross-site POST, and its token is its credential.
+	if r.Method == "POST" && !strings.HasPrefix(r.URL.Path, "/api/unsubscribe/") && !sameOrigin(r) {
+		send(w, 403, map[string]string{"error": "Open Gifty and try again."})
+		return
 	}
 	if path := strings.TrimPrefix(r.URL.Path, "/api/"); r.Method == "POST" && isAuthPath(path) {
 		var ok bool
@@ -439,22 +538,37 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 		return r, false
 	}
 	r.Body = io.NopCloser(bytes.NewReader(body))
-	var in struct{ Email, Password string }
+	var in struct{ Email, Password, Invite, Token string }
 	json.Unmarshal(body, &in)
 	a.mu.Lock()
+	now := time.Now()
 	allowed := a.allow("auth|"+a.clientIP(r), 30)
 	salt := token()
-	if path == "account/delete" {
+	// Hashing is the expensive step, so only requests that could succeed get it: the rest are refused or
+	// fail in dispatch without it. Anonymous callers therefore can't use up the hashing slots.
+	hash, locked := false, false
+	switch path {
+	case "signup":
+		hash = a.hasAccess(r) || a.openInvite(in.Invite)
+	case "login":
 		salt = "missing-account"
-		if u := a.user(r); u != nil {
-			salt = u.Salt
-		}
-	}
-	if path == "login" {
-		salt = "missing-account"
+		hash = a.hasAccess(r)
 		email := strings.ToLower(strings.TrimSpace(in.Email))
 		if u := a.byToken(func(u *User) bool { return u.Email != "" && u.Email == email }); u != nil {
 			salt = u.Salt
+			if allowed && hash {
+				l := a.fails[u.ID]
+				locked = !l.take(now, 10)
+				a.fails[u.ID] = l
+			}
+		}
+	case "reset":
+		h := digest(in.Token)
+		hash = a.byToken(func(v *User) bool { return v.ResetHash != "" && v.ResetHash == h && now.Before(v.ResetExpires) }) != nil
+	case "account/delete":
+		salt = "missing-account"
+		if u := a.user(r); u != nil {
+			salt, hash = u.Salt, true
 		}
 	}
 	a.mu.Unlock()
@@ -462,12 +576,16 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 		send(w, 429, map[string]string{"error": "Too many attempts. Try again in 15 minutes."})
 		return r, false
 	}
-	if path != "signup" && path != "login" && path != "reset" && path != "account/delete" || len(in.Password) > 256 {
+	if locked {
+		send(w, 429, map[string]string{"error": "Too many attempts on this account. Try again in 15 minutes, or reset the password."})
+		return r, false
+	}
+	if !hash || len(in.Password) > 256 {
 		return r, true
 	}
 	select {
 	case a.hashSlots <- struct{}{}:
-	case <-time.After(10 * time.Second):
+	case <-time.After(3 * time.Second):
 		send(w, 503, map[string]string{"error": "Gifty is busy. Try again in a moment."})
 		return r, false
 	}
@@ -476,37 +594,44 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 	return r.WithContext(context.WithValue(r.Context(), prehashKey{}, prehash{salt, h})), true
 }
 
-// allow counts an attempt under key: max per 15 minutes. It tracks at most 10,000 keys; when full, an
-// arbitrary one is dropped so that new clients are never locked out. Expired entries are swept once a minute.
+// allow counts an attempt under key: max per 15 minutes. It tracks at most 10,000 keys; when full, the
+// entry closest to expiring is dropped, which gives up the least throttling. Expired entries are swept once a minute.
 func (a *App) allow(key string, max int) bool {
 	now := time.Now()
 	if now.Sub(a.swept) > time.Minute {
-		a.swept = now
-		for k, l := range a.limits {
-			if now.After(l.Reset) {
-				delete(a.limits, k)
-			}
-		}
+		a.sweep(now)
 	}
-	l := a.limits[key]
-	if now.After(l.Reset) {
-		l = limiter{}
-	}
-	if l.Count >= max {
+	l, seen := a.limits[key]
+	if !l.take(now, max) {
 		return false
 	}
-	if l.Count == 0 {
-		l.Reset = now.Add(15 * time.Minute)
-		if _, seen := a.limits[key]; !seen && len(a.limits) >= 10000 {
-			for k := range a.limits {
-				delete(a.limits, k)
-				break
+	if !seen && len(a.limits) >= 10000 {
+		a.sweep(now)
+		if len(a.limits) >= 10000 {
+			oldest, first := "", true
+			for k, v := range a.limits {
+				if first || v.Reset.Before(a.limits[oldest].Reset) {
+					oldest, first = k, false
+				}
 			}
+			delete(a.limits, oldest)
 		}
 	}
-	l.Count++
 	a.limits[key] = l
 	return true
+}
+func (a *App) sweep(now time.Time) {
+	a.swept = now
+	for k, l := range a.limits {
+		if now.After(l.Reset) {
+			delete(a.limits, k)
+		}
+	}
+	for k, l := range a.fails {
+		if now.After(l.Reset) {
+			delete(a.fails, k)
+		}
+	}
 }
 func (a *App) hasAccess(r *http.Request) bool {
 	if a.access == "" {
@@ -515,9 +640,16 @@ func (a *App) hasAccess(r *http.Request) bool {
 	c, err := r.Cookie("gifty_access")
 	return err == nil && subtle.ConstantTimeCompare([]byte(c.Value), []byte(a.access)) == 1
 }
+
+// grantAccess remembers on this browser that it is past the access gate.
+func (a *App) grantAccess(w http.ResponseWriter) {
+	if a.access != "" {
+		http.SetCookie(w, &http.Cookie{Name: "gifty_access", Value: a.access, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 90 * 86400})
+	}
+}
 func (a *App) openInvite(code string) bool {
 	for _, e := range a.state.Exchanges {
-		if code != "" && e.Invite == code && !e.Archived && len(e.Assignments) == 0 {
+		if code != "" && same(e.Invite, code) && !e.Archived && len(e.Assignments) == 0 {
 			return true
 		}
 	}
@@ -534,10 +666,17 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if err := readJSON(r, &in); err != nil {
 			return nil, err
 		}
-		if a.access == "" || subtle.ConstantTimeCompare([]byte(a.gate(strings.TrimSpace(in.Code))), []byte(a.access)) != 1 {
+		// Wrong guesses share one budget across every client, so rotating addresses doesn't help. Past it, even
+		// the right code is refused until the window ends, so the answer never confirms a guess.
+		now := time.Now()
+		if a.gateFails.Count >= 20 && now.Before(a.gateFails.Reset) {
+			return nil, problem{429, "Too many wrong codes. Try again in 15 minutes."}
+		}
+		if a.access == "" || !same(a.gate(strings.TrimSpace(in.Code)), a.access) {
+			a.gateFails.take(now, 20)
 			return nil, problem{403, "That code isn’t right."}
 		}
-		http.SetCookie(w, &http.Cookie{Name: "gifty_access", Value: a.access, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: 90 * 86400})
+		a.grantAccess(w)
 		return map[string]bool{"ok": true}, nil
 	}
 	if path == "verify" && r.Method == "POST" {
@@ -547,7 +686,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		h := digest(in.Token)
 		v := a.byToken(func(v *User) bool {
-			return v.VerifyHash != "" && v.VerifyHash == h && time.Now().Before(v.VerifyExpires)
+			return v.VerifyHash != "" && same(v.VerifyHash, h) && time.Now().Before(v.VerifyExpires)
 		})
 		if v == nil {
 			return nil, problem{404, "This confirmation link has expired or already been used."}
@@ -559,7 +698,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		// Also used by mail clients' one-click unsubscribe, which posts a form, so the body is ignored.
 		t := strings.TrimPrefix(path, "unsubscribe/")
 		v := a.byToken(func(v *User) bool {
-			return v.Unsub != "" && subtle.ConstantTimeCompare([]byte(v.Unsub), []byte(t)) == 1
+			return same(a.unsubToken(v), t)
 		})
 		if v == nil {
 			return nil, problem{404, "This link doesn’t match an account."}
@@ -595,11 +734,15 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				return nil, bad("Use a password between 12 and 256 characters.")
 			}
 			h := digest(in.Token)
-			v := a.byToken(func(v *User) bool { return v.ResetHash != "" && v.ResetHash == h && now.Before(v.ResetExpires) })
+			v := a.byToken(func(v *User) bool { return v.ResetHash != "" && same(v.ResetHash, h) && now.Before(v.ResetExpires) })
 			if v == nil {
 				return nil, problem{404, "This reset link has expired or already been used. Ask for a new one."}
 			}
+			if pre.hash == "" {
+				return nil, bad("Try again.")
+			}
 			v.Salt, v.Hash = pre.salt, pre.hash
+			delete(a.fails, v.ID)
 			// Opening the link proves the inbox, and a reset signs out every other device.
 			v.ResetHash, v.ResetExpires, v.Verified = "", time.Time{}, true
 			for k, s := range a.state.Sessions {
@@ -608,6 +751,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				}
 			}
 			a.login(w, v)
+			a.grantAccess(w) // a reset is the way back in for someone who never had the code
 			return a.publicUser(v), nil
 		}
 		var in struct{ Name, Email, Password, Invite string }
@@ -644,10 +788,20 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				}
 				return nil, bad("An account already uses that email. Sign in instead.")
 			}
+			if pre.hash == "" {
+				return nil, bad("Try again.")
+			}
+			if len(a.state.Users) >= maxUsers {
+				return nil, problem{503, "Gifty isn’t taking new accounts right now."}
+			}
 			found = &User{ID: token(), Name: in.Name, Email: in.Email, Salt: pre.salt, Hash: pre.hash, Wishes: []Wish{}}
 			a.state.Users[found.ID] = found
 			a.sendVerify(found)
+			a.grantAccess(w) // an invited guest never sees the code, and still needs to sign in again later
 		} else {
+			if !a.hasAccess(r) {
+				return nil, problem{403, "Enter the access code first."}
+			}
 			if len(in.Password) > 256 {
 				return nil, bad("Email or password is incorrect.")
 			}
@@ -656,9 +810,10 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			if found != nil && found.Salt == pre.salt {
 				want = found.Hash
 			}
-			if subtle.ConstantTimeCompare([]byte(pre.hash), []byte(want)) != 1 {
+			if !same(pre.hash, want) {
 				return nil, problem{401, "Email or password is incorrect."}
 			}
+			delete(a.fails, found.ID)
 		}
 		a.login(w, found)
 		return a.publicUser(found), nil
@@ -666,7 +821,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	if strings.HasPrefix(path, "invite/") && r.Method == "GET" {
 		code := strings.TrimPrefix(path, "invite/")
 		for _, e := range a.state.Exchanges {
-			if e.Invite == code && !e.Archived && len(e.Assignments) == 0 {
+			if same(e.Invite, code) && !e.Archived && len(e.Assignments) == 0 {
 				return map[string]any{"name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members)}, nil
 			}
 		}
@@ -813,7 +968,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return nil, err
 		}
 		for _, e := range a.state.Exchanges {
-			if e.Invite == in.Code && !e.Archived && len(e.Assignments) == 0 {
+			if same(e.Invite, in.Code) && !e.Archived && len(e.Assignments) == 0 {
 				if !slices.Contains(e.Members, u.ID) {
 					if len(e.Members) >= 100 {
 						return nil, bad("This exchange is full.")
@@ -831,6 +986,9 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			if x.Owner == u.ID && !x.Archived {
 				active++
 			}
+		}
+		if len(a.state.Exchanges) >= maxExchanges {
+			return nil, problem{503, "Gifty isn’t taking new exchanges right now."}
 		}
 		if active >= 20 {
 			return nil, bad("You can organise up to 20 exchanges at once. Archive one to make room.")
@@ -1169,14 +1327,11 @@ func main() {
 	if v := os.Getenv("GIFTY_SECURE_COOKIES"); v != "" {
 		a.secure = v == "true"
 	}
+	if !a.secure {
+		log.Print("warning: cookies are not marked Secure; use this only on a trusted network or behind HTTPS")
+	}
 	a.trustProxy = os.Getenv("GIFTY_TRUST_PROXY") == "true"
 	if code := strings.TrimSpace(os.Getenv("GIFTY_ACCESS_CODE")); code != "" {
-		if a.state.GateKey == "" {
-			a.state.GateKey = token()
-			if err := a.save(); err != nil {
-				log.Fatal(err)
-			}
-		}
 		a.access = a.gate(code)
 	}
 	a.admins = map[string]bool{}
