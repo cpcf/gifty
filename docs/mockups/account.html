@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Account</title><link rel="stylesheet" href="../../web/style.css"><link rel="stylesheet" href="proposed.css"></head><body>
+<header class="long-nav"><a class="wordmark" href="#">Gifty</a><nav aria-label="Main"><a href="#">Exchanges</a><a href="#">Friends</a><a href="#">Wish list</a><a href="#" aria-current="page">Account</a></nav></header>
+<main id="main">
+<div class="form-page">
+<div class="page-head"><div><h1>Account</h1></div></div>
+
+<section class="sheet" style="margin-bottom:24px">
+  <h2>Birthday</h2>
+  <p>Your friends see this on their calendar. Nobody else does.</p>
+  <div class="row">
+    <div class="field"><label for="m">Month</label>
+      <select id="m"><option>October</option></select></div>
+    <div class="field"><label for="d">Day</label><input id="d" inputmode="numeric" value="25"></div>
+    <div class="field"><label for="y">Year <span class="optional">(optional)</span></label><input id="y" inputmode="numeric" placeholder="1990"></div>
+  </div>
+  <p class="hint field-hint">With a year, friends see how old you’re turning. Without one, they don’t.</p>
+  <label class="check"><input type="checkbox" checked><span>Show my birthday to friends<span class="hint">Untick to keep it saved but hidden.</span></span></label>
+  <div class="buttons" style="margin-top:12px"><button type="button">Save birthday</button></div>
+</section>
+
+<section class="sheet" id="reminders" style="margin-top:0">
+  <h2>Reminders</h2>
+  <dl class="rem-summary">
+    <div><dt class="label">Exchanges</dt><dd>An email a week and a day before the date.</dd></div>
+    <div><dt class="label">Friends’ birthdays</dt><dd>An email a week before, and on the day.</dd></div>
+  </dl>
+  <details class="rem-change"><summary>Change reminders</summary></details>
+  <p class="hint">Birthday emails name the friend and the date. They never say what anyone is getting.</p>
+</section>
+</div>
+</main></body></html>

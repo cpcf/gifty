@@ -1,6 +1,6 @@
 # Gifty
 
-A gift-exchange app for friends and family: a Go standard-library server with a buildless HTML/CSS/JavaScript interface, one process and one data file.
+A gift-exchange app for friends and family: Secret Santa, white elephant and group gifts, plus friends' birthdays and wish lists. A Go standard-library server with a buildless HTML/CSS/JavaScript interface, one process and one data file.
 
 ## Run
 
@@ -37,8 +37,13 @@ go build -o gifty .
 - Sorted ideas: mark an idea as "got it" or "don't want it any more" to hide it from whoever is buying for you, and put it back later. A giver who had marked it as theirs is told to check before buying.
 - Reveal day: from the day before the exchange date, the organiser can show everyone who bought for whom. It can't be undone, and works on archived exchanges.
 - Add to calendar: each exchange offers an all-day calendar file (`.ics`) for its date. The invitation link has a Share button on phones.
+- Friends: people become friends with a link shared by hand (no search, no directory). Opening someone's friend link sends a request and they accept; either side can end it. Friends see each other's birthday and the ideas shown to friends, and nothing else. A friend link can be replaced to stop the old one working.
+- Birthdays and a calendar: a birthday (day and month, year optional, hideable) on the account page, and a month calendar of friends' birthdays with a day panel and the next 30 days. A file of friends' birthdays (`.ics`, repeating yearly) can be downloaded. With email on, an email a week before and on the day, switchable on the account page. A 29 February birthday is kept on 28 February in years without one.
+- One wish list, three audiences: each idea can be shown to friends, to whoever is buying for you in an exchange (every exchange or chosen ones), to both, or to neither. Existing ideas stay as they were.
+- Marking off ideas: friends can mark an idea as theirs. Other friends and anyone buying for the same person in an exchange see that someone has it; the owner never sees which ideas are marked or by whom. Friends' marks end three days after the owner's birthday and when the friendship ends, and the owner gets a note after their birthday to sort their list.
+- Exchange kinds: Secret Santa (the default), white elephant and group gift. A white elephant gives everyone a random pick number instead of a recipient, with a steals-per-gift rule shown to the room. A group gift is for one friend, who is not a member and never sees it: friends of that person join by link and share their friend-shown ideas and marks.
 
-Not included: invitations by email (links are shared by hand). The server operator can read stored assignments, though the admin page never shows them: privacy is enforced between app users, not against whoever runs the server.
+Not included: invitations by email (links are shared by hand), finding people by search or email, seeing who marked an idea, money tracking for group gifts, a subscribable calendar feed, and exchange dates on the birthday calendar. The server operator can read stored assignments, though the admin page never shows them: privacy is enforced between app users, not against whoever runs the server.
 
 ## Configuration
 

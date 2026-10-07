@@ -1,0 +1,71 @@
+/* Proposed additions to web/style.css for friends, birthdays and the calendar. Flat colour, no shadows, ink the only filled button. */
+@font-face{font-family:"Public Sans";src:url(../../web/public-sans.woff2) format("woff2");font-weight:100 900;font-style:normal}
+
+/* Views switch: plain links styled like the main nav; the current one is underlined in ink. */
+.views{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin:0 0 24px}
+.views a{min-height:44px;display:inline-flex;align-items:center;padding:0 12px;text-decoration:none}
+.views a:hover{text-decoration:underline}
+.views a[aria-current=page]{box-shadow:inset 0 -3px 0 var(--ink);font-weight:600}
+
+/* Month calendar. Each day is one button; chips inside are visual, the day panel carries the links. */
+.cal-bar{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"prev title next";align-items:center;gap:12px;margin-bottom:12px}
+.cal-bar h2{grid-area:title;margin:0;text-align:center}
+.cal-bar .prev{grid-area:prev}.cal-bar .next{grid-area:next}
+.cal-today{display:flex;justify-content:flex-end;margin:-4px 0 8px}
+.month{background:var(--sheet);border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.cal-dow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-bottom:2px solid var(--ink)}
+.cal-dow .label{margin:0;padding:8px 8px 6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--rule-light)}
+.day{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:3px;min-height:112px;padding:6px;border:0;border-radius:0;background:var(--sheet);color:var(--ink);font-size:14px;font-weight:400;line-height:1.2;text-align:left}
+.day:hover{background:var(--ground)}
+.day.out{background:var(--ground);color:var(--muted)}
+.day.out:hover{background:var(--paper)}
+.day[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--ink)}
+.day:focus-visible{outline-offset:-6px}
+.day .n{align-self:flex-start;min-width:26px;padding:1px 5px;border-radius:2px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+.day.today .n{background:var(--ink);color:var(--on-ink)}
+.bd{display:block;padding:4px 6px;border-radius:2px;background:var(--c,var(--yellow));color:var(--ink);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bd.y{--c:var(--yellow)}.bd.p{--c:var(--pink)}.bd.b{--c:var(--blue)}.bd.m{--c:var(--mint)}.bd.o{--c:var(--orange)}
+.bd.me{background:var(--sheet);border:1px solid var(--ink);padding:3px 5px}
+.day .more{font-size:13px;font-weight:600;color:var(--muted);padding:0 2px}
+
+/* People for a day or a stretch of days: ruled rows, not tickets. */
+.who-list{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.who-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:56px;padding:6px 0;border-bottom:1px solid var(--rule)}
+.who-list b{display:block;font-weight:600}
+.who-list small{display:block;font-size:14px;color:var(--muted)}
+.who-list .quiet{flex:none;padding-right:0}
+.soon{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.soon a{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:48px;padding:6px 0;border-bottom:1px solid var(--rule);text-decoration:none}
+.soon a:hover b{text-decoration:underline}
+.soon time{white-space:nowrap;font-weight:600;font-variant-numeric:tabular-nums}
+.soon b{font-weight:600;overflow-wrap:anywhere}
+.soon span{font-size:14px;color:var(--muted);white-space:nowrap}
+.soon span.now{color:var(--ink);font-weight:700}
+.panel+.panel{margin-top:16px}
+.panel h2{font-size:16px}
+
+/* A friend request, in the notice style. */
+.request{display:flex;justify-content:space-between;align-items:center;gap:12px 24px;flex-wrap:wrap;border:2px solid var(--ink)}
+.request p{margin:0}
+
+/* A decision shown as plain choices, one per row. */
+.kinds{border:0;padding:0;margin:0 0 20px}
+.kinds legend{font-weight:600;padding:0;margin-bottom:6px}
+.kinds .check{padding:12px 0;border-top:1px solid var(--rule-light);align-items:flex-start}
+.kinds .check:last-of-type{border-bottom:1px solid var(--rule-light)}
+.kinds .check b{display:block;font-weight:600}
+.kinds .check .hint{margin-top:2px}
+.aud{margin:4px 0 0;font-size:14px;color:var(--muted)}
+
+@media(max-width:640px){
+.cal-bar{grid-template-columns:1fr 1fr;grid-template-areas:"title title" "prev next"}
+.cal-bar button{width:100%}
+.day{min-height:56px;padding:4px;gap:2px}
+.day .n{min-width:22px;padding:1px 3px}
+.bd{font-size:0;padding:0;height:6px;border-radius:1px}
+.bd.me{padding:0;border-width:1px}
+.day .more{display:none}
+.cal-dow .label{padding:8px 2px 6px;text-align:center;letter-spacing:.04em}
+.soon a{grid-template-columns:60px minmax(0,1fr) auto}
+}

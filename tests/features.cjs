@@ -66,13 +66,13 @@ await rp.goto(base+'/#wishes');await rp.getByRole('heading',{name:R+' teapot'}).
 assert(!/getting this|Someone else is getting|I’m getting/.test(await rp.locator('main').textContent()),'the owner can see the claim');
 
 // 5. Sorting an idea hides it from the giver, who is warned about one they had claimed.
-await rp.getByRole('button',{name:`Sorted: ${R} scarf`}).click();await audit(rp);await rp.getByRole('dialog').getByRole('button',{name:'I’ve got it'}).click();
-await rp.getByRole('heading',{name:'Sorted',exact:true}).waitFor();await rp.getByText('You’ve got this',{exact:true}).waitFor();
-await rp.getByRole('button',{name:`Sorted: ${R} teapot`}).click();await rp.getByRole('dialog').getByRole('button',{name:'I don’t want it any more'}).click();await rp.getByText('You don’t want this any more').waitFor();await audit(rp);await shot(rp,'sorted');
+await rp.getByRole('button',{name:`Done with: ${R} scarf`}).click();await audit(rp);await rp.getByRole('dialog').getByRole('button',{name:'I’ve got it'}).click();
+await rp.getByRole('heading',{name:'Done with',exact:true}).waitFor();await rp.getByText('You’ve got this',{exact:true}).waitFor();
+await rp.getByRole('button',{name:`Done with: ${R} teapot`}).click();await rp.getByRole('dialog').getByRole('button',{name:'I don’t want it any more'}).click();await rp.getByText('You don’t want this any more').waitFor();await audit(rp);await shot(rp,'sorted');
 await alex.reload();await alex.locator('#their-wishes').waitFor();
 assert.equal(await alex.getByRole('heading',{name:R+' scarf'}).count(),0,'a sorted idea is still shown to the giver');
 await alex.getByText('They don’t want this any more. Check before you buy it.').waitFor();
-await rp.getByRole('button',{name:`Put back: ${R} teapot`}).click();await rp.getByRole('heading',{name:'Sorted',exact:true}).waitFor();
+await rp.getByRole('button',{name:`Put back: ${R} teapot`}).click();await rp.getByRole('heading',{name:'Done with',exact:true}).waitFor();
 await alex.reload();await alex.getByRole('button',{name:`Undo: you’re getting ${R} teapot`}).waitFor();
 
 // 4. Reveal day: only the organiser is offered it, and it shows who bought for whom.

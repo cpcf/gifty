@@ -56,6 +56,15 @@ type User struct {
 	MailCount    int        `json:",omitempty"`
 	NotifyDay    string     `json:",omitempty"` // with NotifyCount, caps exchange emails per day
 	NotifyCount  int        `json:",omitempty"`
+	// Friends are people who have agreed to see each other's birthday and shared ideas (see friends.go).
+	Birthday       *Birthday `json:",omitempty"`
+	BirthdayHidden bool      `json:",omitempty"` // saved, but not shown to friends
+	Friends        []string  `json:",omitempty"`
+	FriendsIn      []string  `json:",omitempty"` // people who asked to be this person's friend
+	FriendsOut     []string  `json:",omitempty"` // people this person asked
+	FriendCode     string    `json:",omitempty"` // opening the friend link with it sends a request
+	NoBirthdayMail bool      `json:",omitempty"`
+	BirthdayMailed []string  `json:",omitempty"` // keys of birthday emails already queued
 }
 type Wish struct {
 	ID    string `json:"id"`
@@ -65,6 +74,10 @@ type Wish struct {
 	Price string `json:"price"`
 	// Exchanges limits who sees the idea to the people buying for this user in those exchanges; empty means every exchange.
 	Exchanges []string `json:"exchanges"`
+	// Friends shows the idea to the owner's friends. NoExchanges keeps it from whoever is buying for the owner,
+	// whatever Exchanges says, so an idea can be for friends only.
+	Friends     bool `json:"friends,omitempty"`
+	NoExchanges bool `json:"noExchanges,omitempty"`
 	// Images are the idea's photos as data URIs, in display order. They live in the data file; clients
 	// are never sent them, only same-origin URLs to fetch the bytes from /image/.
 	Images []string `json:"images,omitempty"`
@@ -73,8 +86,17 @@ type Wish struct {
 	Status string `json:"status,omitempty"`
 	// ClaimedBy is the giver who said they are getting this, and ClaimedIn the exchange they are giving in. The
 	// owner is never told; other givers see only that someone has it.
-	ClaimedBy string `json:"claimedBy,omitempty"`
-	ClaimedIn string `json:"claimedIn,omitempty"`
+	ClaimedBy string    `json:"claimedBy,omitempty"`
+	ClaimedIn string    `json:"claimedIn,omitempty"` // an exchange, or friendClaim for a friend's claim
+	ClaimedAt time.Time `json:"claimedAt,omitzero"`
+}
+
+// friendClaim is ClaimedIn for a claim made as a friend rather than as someone's giver in an exchange.
+const friendClaim = "friends"
+
+// forExchange is whether the idea is meant for whoever buys for its owner in exchange id.
+func (w Wish) forExchange(id string) bool {
+	return !w.NoExchanges && (len(w.Exchanges) == 0 || slices.Contains(w.Exchanges, id))
 }
 
 // wishOut is an idea as clients see it: photos are URLs, never the stored data.
@@ -85,14 +107,17 @@ type wishOut struct {
 	Note      string   `json:"note"`
 	Price     string   `json:"price"`
 	Exchanges []string `json:"exchanges"`
-	Images    []string `json:"images,omitempty"`
-	Status    string   `json:"status,omitempty"`
+	// Friends and NoExchanges are only sent to the owner.
+	Friends     bool     `json:"friends,omitempty"`
+	NoExchanges bool     `json:"noExchanges,omitempty"`
+	Images      []string `json:"images,omitempty"`
+	Status      string   `json:"status,omitempty"`
 	// Claim is only sent to a giver: "mine" or "other".
 	Claim string `json:"claim,omitempty"`
 }
 
 func publicWish(w Wish) wishOut {
-	out := wishOut{ID: w.ID, Title: w.Title, URL: w.URL, Note: w.Note, Price: w.Price, Exchanges: w.Exchanges, Status: w.Status}
+	out := wishOut{ID: w.ID, Title: w.Title, URL: w.URL, Note: w.Note, Price: w.Price, Exchanges: w.Exchanges, Friends: w.Friends, NoExchanges: w.NoExchanges, Status: w.Status}
 	for i := range w.Images {
 		out.Images = append(out.Images, imageURL(w.ID, i))
 	}
@@ -106,7 +131,7 @@ func imageURL(wishID string, i int) string { return "/image/" + wishID + "/" + s
 func wishesFor(u *User, e *Exchange, giver string) []wishOut {
 	out := []wishOut{}
 	for _, w := range u.Wishes {
-		if len(w.Exchanges) != 0 && !slices.Contains(w.Exchanges, e.ID) {
+		if !w.forExchange(e.ID) {
 			continue
 		}
 		mine := w.ClaimedBy != "" && w.ClaimedBy == giver
@@ -114,7 +139,7 @@ func wishesFor(u *User, e *Exchange, giver string) []wishOut {
 			continue
 		}
 		o := publicWish(w)
-		o.Exchanges = nil
+		o.Exchanges, o.Friends, o.NoExchanges = nil, false, false
 		switch {
 		case mine:
 			o.Claim = "mine"
@@ -225,6 +250,13 @@ type Exchange struct {
 	Revealed bool `json:",omitempty"`
 	// Threads holds the anonymous conversations, one per giver (keyed by the giver's ID) with the person they buy for.
 	Threads map[string][]Message `json:",omitempty"`
+	// Kind is "" for Secret Santa, "elephant" or "group" (see kinds.go).
+	Kind string `json:",omitempty"`
+	// Order is the pick order of a white elephant, set when entries close. Steals is the room's rule.
+	Order  []string `json:",omitempty"`
+	Steals int      `json:",omitempty"`
+	// For is who a group gift is for. They are not a member and never see it.
+	For string `json:",omitempty"`
 }
 
 // Message is one line of an anonymous conversation between a giver and their recipient.
@@ -479,7 +511,7 @@ func (a *App) publicUser(u *User) any {
 	for i, w := range u.Wishes {
 		wishes[i] = publicWish(w)
 	}
-	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]Reminder{}, u.Reminders...), "admin": a.isAdmin(u)}
+	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]Reminder{}, u.Reminders...), "admin": a.isAdmin(u), "birthday": u.Birthday, "birthdayHidden": u.BirthdayHidden, "birthdayMail": !u.NoBirthdayMail, "birthdayRecent": u.Birthday.recent(time.Now())}
 }
 
 // isAdmin needs a confirmed address, so nobody can become an administrator by signing up with an admin's email first.
@@ -497,6 +529,7 @@ const deletedName = "Deleted account"
 // removeUser deletes an account. People in drawn exchanges stay on as an empty
 // "Deleted account" so everyone else's draw still adds up; otherwise the record goes.
 func (a *App) removeUser(u *User) error {
+	a.forgetUser(u.ID)
 	for _, e := range a.state.Exchanges {
 		if e.Owner == u.ID && !e.Archived && len(e.Members) > 1 {
 			return bad("You organise “" + e.Name + "” with other people in it. Archive it first.")
@@ -514,7 +547,7 @@ func (a *App) removeUser(u *User) error {
 		delete(e.MyReminders, u.ID)
 		delete(e.Reminded, u.ID)
 		e.Ready = slices.DeleteFunc(e.Ready, func(m string) bool { return m == u.ID })
-		if len(e.Assignments) == 0 {
+		if !e.locked() {
 			e.dropMember(u.ID)
 		} else {
 			kept = true
@@ -600,16 +633,16 @@ func (a *App) exchange(e *Exchange, u *User) any {
 	for _, id := range e.Members {
 		m := a.state.Users[id]
 		member := map[string]any{"id": id, "name": m.Name}
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			// Whether someone has their gift is shared with the group; who it is for never is.
 			member["ready"] = slices.Contains(e.Ready, id)
 		}
 		members = append(members, member)
 	}
-	v := map[string]any{"id": e.ID, "name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "note": e.Note, "owner": e.Owner, "members": members, "drawn": len(e.Assignments) > 0, "archived": e.Archived, "reminders": e.defaultReminders()}
+	v := map[string]any{"id": e.ID, "name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "note": e.Note, "owner": e.Owner, "members": members, "drawn": e.locked(), "archived": e.Archived, "reminders": e.defaultReminders()}
 	mine, source := a.reminders(e, u.ID)
 	v["mine"] = map[string]any{"reminders": mine, "source": source}
-	if u.ID == e.Owner && !e.Archived && len(e.Assignments) == 0 {
+	if u.ID == e.Owner && !e.Archived && !e.locked() {
 		v["invite"] = e.Invite
 	}
 	if id := e.Assignments[u.ID]; id != "" {
@@ -721,9 +754,9 @@ func (a *App) serveImage(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if owner.ID != u.ID {
-				allowed := false
+				allowed := wish.Friends && slices.Contains(owner.Friends, u.ID) && (wish.Status == "" || wish.ClaimedBy == u.ID)
 				for _, e := range a.state.Exchanges {
-					if e.Assignments[u.ID] == owner.ID && (len(wish.Exchanges) == 0 || slices.Contains(wish.Exchanges, e.ID)) && (wish.Status == "" || wish.ClaimedBy == u.ID) {
+					if e.Assignments[u.ID] == owner.ID && wish.forExchange(e.ID) && (wish.Status == "" || wish.ClaimedBy == u.ID) {
 						allowed = true
 						break
 					}
@@ -870,7 +903,7 @@ func (a *App) grantAccess(w http.ResponseWriter) {
 }
 func (a *App) openInvite(code string) bool {
 	for _, e := range a.state.Exchanges {
-		if code != "" && same(e.Invite, code) && !e.Archived && len(e.Assignments) == 0 {
+		if code != "" && same(e.Invite, code) && !e.Archived && !e.locked() {
 			return true
 		}
 	}
@@ -1021,7 +1054,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			if len(a.state.Users) >= maxUsers {
 				return nil, problem{503, "Gifty isn’t taking new accounts right now."}
 			}
-			found = &User{ID: token(), Name: in.Name, Email: in.Email, Salt: pre.salt, Hash: pre.hash, Wishes: []Wish{}}
+			found = &User{ID: token(), Name: in.Name, Email: in.Email, Salt: pre.salt, Hash: pre.hash, Wishes: []Wish{}, FriendCode: token()}
 			a.state.Users[found.ID] = found
 			a.sendVerify(found)
 			a.grantAccess(w) // an invited guest never sees the code, and still needs to sign in again later
@@ -1050,11 +1083,18 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	if strings.HasPrefix(path, "invite/") && r.Method == "GET" {
 		code := strings.TrimPrefix(path, "invite/")
 		for _, e := range a.state.Exchanges {
-			if same(e.Invite, code) && !e.Archived && len(e.Assignments) == 0 {
-				return map[string]any{"name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members)}, nil
+			if same(e.Invite, code) && !e.Archived && !e.locked() {
+				return map[string]any{"name": e.Name, "date": e.Date, "budget": e.Budget, "currency": e.Currency, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members), "kind": kindName(e.Kind)}, nil
 			}
 		}
 		return nil, problem{404, "This invitation is closed or no longer exists."}
+	}
+	if code, ok := strings.CutPrefix(path, "friend-link/"); ok && r.Method == "GET" {
+		// Like an invitation, a friend link tells whoever holds it who sent it, so a guest knows what they are opening.
+		if t := a.byCode(code); t != nil && t.Name != deletedName {
+			return map[string]string{"name": t.Name}, nil
+		}
+		return nil, problem{404, "This friend link no longer works."}
 	}
 	if u == nil {
 		return nil, problem{401, "Sign in to continue."}
@@ -1095,7 +1135,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			u.Reminders = nil
 		}
 		for _, e := range a.state.Exchanges {
-			if len(e.Assignments) > 0 && slices.Contains(e.Members, u.ID) {
+			if e.live() && slices.Contains(e.Members, u.ID) {
 				a.dueReminders(e, u.ID, time.Now())
 			}
 		}
@@ -1150,6 +1190,9 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			Note      string   `json:"note"`
 			Price     string   `json:"price"`
 			Exchanges []string `json:"exchanges"`
+			// Friends shows the idea to friends; NoExchanges keeps it from whoever buys for you.
+			Friends     bool `json:"friends"`
+			NoExchanges bool `json:"noExchanges"`
 			// Photos, when present, is the idea's whole photo list in order: each entry is either a
 			// photo already on the idea (its /image/ URL) or a new one as a data URI. Absent means
 			// leave the photos alone.
@@ -1193,9 +1236,15 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			}
 			w = u.Wishes[index] // keeps the stored photos unless in.Photos replaces them
 		}
-		w.Title, w.URL, w.Note, w.Price, w.Exchanges = in.Title, in.URL, in.Note, in.Price, scope
-		if len(scope) > 0 && !slices.Contains(scope, w.ClaimedIn) {
-			w.ClaimedBy, w.ClaimedIn = "", ""
+		if in.NoExchanges {
+			scope = []string{}
+		}
+		w.Title, w.URL, w.Note, w.Price, w.Exchanges, w.Friends, w.NoExchanges = in.Title, in.URL, in.Note, in.Price, scope, in.Friends, in.NoExchanges
+		// A claim ends when its holder is no longer meant to see the idea.
+		if w.ClaimedBy != "" {
+			if w.ClaimedIn == friendClaim && !w.Friends || w.ClaimedIn != friendClaim && (w.NoExchanges || len(scope) > 0 && !slices.Contains(scope, w.ClaimedIn)) {
+				w.ClaimedBy, w.ClaimedIn, w.ClaimedAt = "", "", time.Time{}
+			}
 		}
 		if in.Photos != nil {
 			if len(*in.Photos) > maxImages {
@@ -1231,6 +1280,30 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		return a.publicUser(u), nil
 	}
+	if path == "birthday" && r.Method == "POST" {
+		if err := a.setBirthday(u, r); err != nil {
+			return nil, err
+		}
+		return a.publicUser(u), nil
+	}
+	if path == "account/birthday-mail" && r.Method == "POST" {
+		var in struct{ Notify bool }
+		if err := readJSON(r, &in); err != nil {
+			return nil, err
+		}
+		u.NoBirthdayMail = !in.Notify
+		return a.publicUser(u), nil
+	}
+	if path == "friends" || strings.HasPrefix(path, "friends/") {
+		return a.friendsAPI(u, strings.FieldsFunc(strings.TrimPrefix(strings.TrimPrefix(path, "friends"), "/"), func(r rune) bool { return r == '/' }), r)
+	}
+	if code, ok := strings.CutPrefix(path, "friend/"); ok && r.Method == "GET" {
+		t := a.byCode(code)
+		if t == nil {
+			return nil, problem{404, "This friend link no longer works."}
+		}
+		return map[string]any{"name": t.Name, "own": t.ID == u.ID, "friends": areFriends(u, t), "asked": slices.Contains(t.FriendsIn, u.ID), "asking": slices.Contains(u.FriendsIn, t.ID)}, nil
+	}
 	if id, ok := strings.CutSuffix(strings.TrimPrefix(path, "wishes/"), "/status"); ok && strings.HasPrefix(path, "wishes/") && r.Method == "POST" {
 		if err := a.setStatus(u, id, r); err != nil {
 			return nil, err
@@ -1252,12 +1325,18 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return nil, err
 		}
 		for _, e := range a.state.Exchanges {
-			if same(e.Invite, in.Code) && !e.Archived && len(e.Assignments) == 0 {
+			if same(e.Invite, in.Code) && !e.Archived && !e.locked() {
 				if !slices.Contains(e.Members, u.ID) {
+					if err := a.canJoin(e, u); err != nil {
+						return nil, err
+					}
 					if len(e.Members) >= 100 {
 						return nil, bad("This exchange is full.")
 					}
 					e.Members = append(e.Members, u.ID)
+					if e.live() {
+						a.dueReminders(e, u.ID, time.Now())
+					}
 				}
 				return a.exchange(e, u), nil
 			}
@@ -1278,10 +1357,13 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return nil, bad("You can organise up to 20 exchanges at once. Archive one to make room.")
 		}
 		e := &Exchange{ID: token(), Owner: u.ID, Invite: token(), Members: []string{u.ID}, Reminders: slices.Clone(defaultReminders)}
-		if err := details(r, e); err != nil {
+		if err := a.details(r, e, u, true); err != nil {
 			return nil, err
 		}
 		a.state.Exchanges[e.ID] = e
+		if e.live() {
+			a.dueReminders(e, u.ID, time.Now()) // a group gift has no draw to skip reminders that are already late
+		}
 		return a.exchange(e, u), nil
 	}
 	parts := strings.Split(path, "/")
@@ -1303,7 +1385,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if e.Owner == u.ID {
 			return nil, bad("The organiser cannot leave their exchange.")
 		}
-		if len(e.Assignments) > 0 || e.Archived {
+		if e.locked() || e.Archived {
 			return nil, bad("Membership is locked for this exchange.")
 		}
 		e.dropMember(u.ID)
@@ -1333,13 +1415,13 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			}
 			e.MyReminders[u.ID] = days
 		}
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			a.dueReminders(e, u.ID, time.Now())
 		}
 		return a.exchange(e, u), nil
 	}
 	if action == "ready" {
-		if len(e.Assignments) == 0 {
+		if !e.locked() {
 			return nil, bad("Entries aren’t closed yet.")
 		}
 		var in struct{ Ready bool }
@@ -1390,7 +1472,10 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	switch action {
 	case "apart":
-		if len(e.Assignments) > 0 {
+		if e.Kind != "" {
+			return nil, bad("Only a Secret Santa has pairs to keep apart.")
+		}
+		if e.locked() {
 			return nil, bad("Pairs can’t be changed once entries are closed.")
 		}
 		if err := a.setApart(e, r); err != nil {
@@ -1407,7 +1492,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return nil, err
 		}
 		e.Reminders = days
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			for _, id := range e.Members {
 				a.dueReminders(e, id, time.Now())
 			}
@@ -1415,19 +1500,19 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	case "archive":
 		e.Archived = true
 	case "edit":
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			return nil, bad("Details can’t be changed once entries are closed.")
 		}
-		if err := details(r, e); err != nil {
+		if err := a.details(r, e, u, false); err != nil {
 			return nil, err
 		}
 	case "rotate":
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			return nil, bad("Invitations stop working once entries are closed.")
 		}
 		e.Invite = token()
 	case "remove":
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			return nil, bad("Nobody can be removed or leave once entries are closed.")
 		}
 		var in struct{ ID string }
@@ -1439,17 +1524,24 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		e.dropMember(in.ID)
 	case "draw":
-		if len(e.Assignments) > 0 {
+		if e.locked() {
 			return nil, bad("Entries are already closed.")
 		}
 		if len(e.Members) < 3 {
 			return nil, bad("You need at least three people to close entries.")
 		}
-		as, ok := draw(e.Members, e.Apart)
-		if !ok {
-			return nil, bad("The pairs kept apart leave someone with nobody to draw. Remove a pair and try again.")
+		switch e.Kind {
+		case kindGroup:
+			return nil, bad("A group gift has no draw.")
+		case kindElephant:
+			e.lockElephant()
+		default:
+			as, ok := draw(e.Members, e.Apart)
+			if !ok {
+				return nil, bad("The pairs kept apart leave someone with nobody to draw. Remove a pair and try again.")
+			}
+			e.Assignments = as
 		}
-		e.Assignments = as
 		a.drawn(e)
 	default:
 		return nil, problem{404, "Page not found."}
@@ -1476,7 +1568,7 @@ func (a *App) admin(path string, r *http.Request, u *User) (any, error) {
 			users = append(users, map[string]any{"id": v.ID, "name": v.Name, "email": v.Email, "verified": v.Verified, "exchanges": n, "admin": a.isAdmin(v), "self": v.ID == u.ID})
 		}
 		for _, e := range a.state.Exchanges {
-			exchanges = append(exchanges, map[string]any{"id": e.ID, "name": e.Name, "date": e.Date, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members), "drawn": len(e.Assignments) > 0, "archived": e.Archived})
+			exchanges = append(exchanges, map[string]any{"id": e.ID, "name": e.Name, "date": e.Date, "organiser": a.state.Users[e.Owner].Name, "people": len(e.Members), "drawn": e.locked(), "archived": e.Archived})
 		}
 		slices.SortFunc(users, func(x, y map[string]any) int {
 			return strings.Compare(strings.ToLower(x["name"].(string)), strings.ToLower(y["name"].(string)))
@@ -1514,8 +1606,8 @@ func (a *App) admin(path string, r *http.Request, u *User) (any, error) {
 	}
 	return nil, problem{404, "Page not found."}
 }
-func details(r *http.Request, e *Exchange) error {
-	var in struct{ Name, Date, Budget, Currency, Note string }
+func (a *App) details(r *http.Request, e *Exchange, u *User, create bool) error {
+	var in struct{ Name, Date, Budget, Currency, Note, Kind, Steals, For string }
 	if err := readJSON(r, &in); err != nil {
 		return err
 	}
@@ -1552,7 +1644,7 @@ func details(r *http.Request, e *Exchange) error {
 	e.Budget = in.Budget
 	e.Currency = in.Currency
 	e.Note = strings.TrimSpace(in.Note)
-	return nil
+	return a.kindDetails(e, u, create, in.Kind, in.Steals, in.For)
 }
 func (a *App) handler() http.Handler {
 	mux := http.NewServeMux()
@@ -1565,7 +1657,7 @@ func (a *App) handler() http.Handler {
 		etag string
 	}
 	static := map[string]file{}
-	for _, name := range []string{"index.html", "app.js", "style.css", "favicon.svg", "public-sans.woff2", "public-sans-OFL.txt"} {
+	for _, name := range []string{"index.html", "friends.js", "app.js", "style.css", "favicon.svg", "public-sans.woff2", "public-sans-OFL.txt"} {
 		b, _ := assets.ReadFile("web/" + name)
 		sum := sha256.Sum256(b)
 		static["/"+name] = file{b, `"` + hex.EncodeToString(sum[:8]) + `"`}

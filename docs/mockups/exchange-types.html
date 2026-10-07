@@ -1,0 +1,60 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exchange types</title><link rel="stylesheet" href="../../web/style.css"><link rel="stylesheet" href="proposed.css">
+<style>.frame-title{margin:56px 0 12px}.frame-title:first-of-type{margin-top:0}</style></head><body>
+<header class="long-nav"><a class="wordmark" href="#">Gifty</a><nav aria-label="Main"><a href="#" aria-current="page">Exchanges</a><a href="#">Friends</a><a href="#">Wish list</a><a href="#">Account</a></nav></header>
+<main id="main">
+
+<p class="label frame-title">1. New exchange, kind chosen first</p>
+<div class="form-page">
+<div class="page-head"><div><h1>New exchange</h1></div></div>
+<div class="sheet">
+  <fieldset class="kinds">
+    <legend>Kind of exchange</legend>
+    <label class="check"><input type="radio" name="k" checked><span><b>Secret Santa</b><span class="hint">Everyone draws one name and buys for that person. They see that person’s wish list.</span></span></label>
+    <label class="check"><input type="radio" name="k"><span><b>White elephant</b><span class="hint">Everyone brings one wrapped gift. The draw gives each person a number for the order of picking. Nobody buys for anyone in particular.</span></span></label>
+    <label class="check"><input type="radio" name="k"><span><b>Group gift</b><span class="hint">Friends give one gift to a friend who doesn’t know. They share that friend’s list and mark what’s taken.</span></span></label>
+  </fieldset>
+  <div class="field"><label for="n">Name</label><input id="n" value="Office swap 2026"></div>
+  <div class="row">
+    <div class="field"><label for="dt">Date</label><input id="dt" value="2026-12-18"></div>
+    <div class="field"><label for="b">Limit per gift</label><input id="b" value="20"></div>
+  </div>
+  <div class="field"><label for="s">Steals per gift</label><input id="s" inputmode="numeric" value="3" style="max-width:120px"><p class="hint">White elephant only. A rule for the room; Gifty doesn’t enforce it.</p></div>
+  <div class="buttons"><button type="button">Create exchange</button></div>
+</div>
+</div>
+
+<p class="label frame-title">2. White elephant, after the organiser locks it in and you have drawn</p>
+<a class="back" href="#">Exchanges</a>
+<div class="page-head"><div><h1>Office swap 2026</h1><span class="status drawn">Drawn</span> <span class="status">White elephant</span></div></div>
+<dl class="facts">
+  <div><dt class="label">Date</dt><dd>18 Dec 2026</dd></div>
+  <div><dt class="label">Limit per gift</dt><dd>£20</dd></div>
+  <div><dt class="label">Steals per gift</dt><dd>3</dd></div>
+  <div><dt class="label">People</dt><dd>8</dd></div>
+</dl>
+<div class="detail">
+<div class="detail-main">
+  <section>
+    <div class="my-ticket"><div class="fold b" style="--h:104px">
+      <div class="half top"><div class="face"><div class="stub">4</div><div class="main"><span class="k">You pick</span><span class="name">4th</span></div></div></div>
+      <div class="half bottom"><div class="face front"><button type="button" class="ready-toggle">Mark gift as ready</button></div></div>
+    </div></div>
+    <p class="hint" style="margin-top:14px">1 picks first. Everyone after can open a new gift or steal one that’s been opened.</p>
+  </section>
+  <section>
+    <div class="grid-head"><h2>Pick order</h2><span class="num muted">8 people</span></div>
+    <ul class="tickets">
+      <li class="tk b"><div class="stub">1</div><div class="main"><div class="who"><span class="name">Priya</span></div></div></li>
+      <li class="tk y"><div class="stub">2</div><div class="main"><div class="who"><span class="name">Sam</span><span class="sub">Organiser</span></div></div></li>
+      <li class="tk o"><div class="stub">3</div><div class="main"><div class="who"><span class="name">Tom</span><span class="sub">Gift ready</span></div></div></li>
+      <li class="tk p"><div class="stub">4</div><div class="main"><div class="who"><span class="name">You</span></div></div></li>
+      <li class="tk m"><div class="stub">5</div><div class="main"><div class="who"><span class="name">Dee</span></div></div></li>
+    </ul>
+    <p class="hint">Numbers are set. Later numbers see more gifts before they choose.</p>
+  </section>
+</div>
+<aside>
+  <section class="sheet"><h2>Bring a wrapped gift</h2><p>Up to £20. Nothing to enter here: the wish lists and messages for Secret Santa don’t apply.</p></section>
+</aside>
+</div>
+</main></body></html>

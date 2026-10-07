@@ -186,8 +186,9 @@ func threadView(thread []Message, asGiver bool) []map[string]any {
 // exchangeExtras adds what depends on the draw, the conversations and the reveal. A person sees only the two
 // conversations they are in, and the pairs kept apart only if they organise the exchange.
 func (a *App) exchangeExtras(v map[string]any, e *Exchange, u *User) {
-	drawn := len(e.Assignments) > 0
-	if u.ID == e.Owner && !drawn {
+	a.kindExtras(v, e, u)
+	drawn := e.locked()
+	if u.ID == e.Owner && !drawn && e.Kind == "" {
 		apart := [][2]string{}
 		v["apart"] = append(apart, e.Apart...)
 	}
@@ -220,6 +221,9 @@ func (a *App) exchangeExtras(v map[string]any, e *Exchange, u *User) {
 // "recipient" (u is the giver, writing to who they buy for) or "giver" (u is the recipient, answering).
 // Neither side learns who the other is from this.
 func (a *App) say(e *Exchange, u *User, r *http.Request) error {
+	if e.Kind != "" {
+		return bad("This kind of exchange has no messages.")
+	}
 	if len(e.Assignments) == 0 {
 		return bad("Entries aren’t closed yet.")
 	}
@@ -276,6 +280,9 @@ func (a *App) say(e *Exchange, u *User, r *http.Request) error {
 // claim records that u, who is buying for the owner of an idea, is getting it, so nobody else buying for the
 // same person in another exchange gets it too. The owner is never told.
 func (a *App) claim(e *Exchange, u *User, r *http.Request) error {
+	if e.Kind != "" {
+		return bad("Mark what you’re getting from your friend’s page instead.")
+	}
 	to := a.state.Users[e.Assignments[u.ID]]
 	if to == nil {
 		return bad("Entries aren’t closed yet.")
@@ -296,14 +303,14 @@ func (a *App) claim(e *Exchange, u *User, r *http.Request) error {
 	// Letting go of your own claim always works, whatever has happened to the idea or the exchange since.
 	if !in.Claim {
 		if mine {
-			w.ClaimedBy, w.ClaimedIn = "", ""
+			w.ClaimedBy, w.ClaimedIn, w.ClaimedAt = "", "", time.Time{}
 		}
 		return nil
 	}
 	if e.Archived {
 		return bad("This exchange is archived.")
 	}
-	if (len(w.Exchanges) != 0 && !slices.Contains(w.Exchanges, e.ID)) || (w.Status != "" && !mine) {
+	if !w.forExchange(e.ID) || (w.Status != "" && !mine) {
 		return problem{404, "Gift idea not found."}
 	}
 	switch {
@@ -312,7 +319,7 @@ func (a *App) claim(e *Exchange, u *User, r *http.Request) error {
 	case w.Status != "":
 		return bad("They’ve sorted this one out already.")
 	default:
-		w.ClaimedBy, w.ClaimedIn = u.ID, e.ID
+		w.ClaimedBy, w.ClaimedIn, w.ClaimedAt = u.ID, e.ID, time.Now().UTC()
 	}
 	return nil
 }
@@ -322,7 +329,7 @@ func (a *App) clearClaims(match func(*Wish) bool) {
 	for _, v := range a.state.Users {
 		for i := range v.Wishes {
 			if w := &v.Wishes[i]; w.ClaimedBy != "" && match(w) {
-				w.ClaimedBy, w.ClaimedIn = "", ""
+				w.ClaimedBy, w.ClaimedIn, w.ClaimedAt = "", "", time.Time{}
 			}
 		}
 	}
@@ -383,6 +390,10 @@ func (a *App) serveCalendar(w http.ResponseWriter, r *http.Request) {
 	u := a.user(r)
 	if u == nil {
 		http.Error(w, "Sign in to continue.", 401)
+		return
+	}
+	if strings.TrimPrefix(r.URL.Path, "/calendar/") == "birthdays" {
+		a.serveBirthdays(w, u)
 		return
 	}
 	e := a.state.Exchanges[strings.TrimPrefix(r.URL.Path, "/calendar/")]

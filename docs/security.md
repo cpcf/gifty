@@ -40,6 +40,15 @@ Gifty is built for a small, trusted audience, but it is meant to be safe on the 
 - A public deployment over plain HTTP would send session cookies unencrypted. Gifty logs a warning when cookies aren't marked Secure.
 - Sessions last 30 days and aren't rotated while in use.
 
+## Friends, birthdays and kinds
+
+- **Making friends:** by a 256-bit friend link per person, never by search or email lookup, so there is no way to list accounts. Opening the link sends a request; nothing is shared until the link's owner accepts. A forwarded link can only ask. Replacing the link stops the old one. A person can have 20 requests outstanding and 40 waiting, and 200 friends. The friend link does not let anyone past the access code.
+- **What a friend is sent:** name, the birthday if its owner shows it, a count of friend-shown ideas, those ideas (and their photos, from the same-origin `/image/` route, for ideas shown to friends only) and, for each, whether the friend or someone else has marked it. Never an email address, never which exchanges an idea is in, never who marked what.
+- **Marks:** stored on the idea like exchange claims and sent only to people who can see the idea, as "mine" or "other". The owner's own responses never contain a mark. They end when the idea stops being shown to friends, when the friendship ends (both directions), when either account is deleted, and three days after the owner's birthday. The note after a birthday asking the owner to sort their list is the same for every idea, so it says nothing about marks.
+- **Group gifts** are visible only to their members. The person a gift is for cannot join (the answer looks like a closed invitation), is not a member, and so never gets the exchange in a list, a page, a reminder or a calendar file. Joining needs being that person's friend. The invitation preview is public like every invitation, so it shows the exchange's name: the form warns the organiser not to put the person's name in it. Deleting the account a gift is for deletes the gift.
+- **White elephant** numbers come from the same uniform shuffle as draws. The order is not secret and is sent to every member after entries close; the draw animation is cosmetic, as for Secret Santa.
+- **Birthday emails** name the friend and the date and link to their page. They never mention marks or gifts and respect the same opt-outs and daily caps as exchange emails. The server operator can read birthdays and marks, like assignments.
+
 ## Messages, claims and the reveal
 
 - A conversation belongs to one giver and their recipient. Each person is sent only the conversations they are in, and nothing in them names the other side. The server operator can read them, like assignments.

@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Friends calendar</title><link rel="stylesheet" href="../../web/style.css"><link rel="stylesheet" href="proposed.css"></head><body>
+<header class="long-nav"><a class="wordmark" href="#">Gifty</a><nav aria-label="Main"><a href="#">Exchanges</a><a href="#" aria-current="page">Friends</a><a href="#">Wish list</a><a href="#">Account</a></nav></header>
+<main id="main">
+<div class="page-head"><div><h1>Friends</h1></div><button type="button" class="secondary">Share friend link</button></div>
+<nav class="views" aria-label="Friends views"><a href="#" aria-current="page">Calendar</a><a href="friends.html">People</a></nav>
+
+<div class="detail">
+<div class="detail-main">
+  <div class="cal-bar">
+    <button type="button" class="secondary prev">September</button>
+    <h2 id="month">October 2026</h2>
+    <button type="button" class="secondary next">November</button>
+  </div>
+  <div class="cal-today"><button type="button" class="quiet">Back to this month</button></div>
+  <div class="month" role="group" aria-labelledby="month">
+    <div class="cal-dow" aria-hidden="true"><span class="label">Mon</span><span class="label">Tue</span><span class="label">Wed</span><span class="label">Thu</span><span class="label">Fri</span><span class="label">Sat</span><span class="label">Sun</span></div>
+    <div class="cal-grid" id="grid"></div>
+  </div>
+  <p class="hint">Your friends’ birthdays, and yours. Choose a day to see who it is.</p>
+</div>
+
+<aside>
+  <section class="sheet panel" id="dayp"></section>
+  <section class="sheet panel">
+    <h2>Coming up</h2>
+    <ul class="soon">
+      <li><a href="friend-list.html"><time>11 Oct</time><b>Dee</b><span>in 3 days</span></a></li>
+      <li><a href="friend-list.html"><time>14 Oct</time><b>Anna</b><span>in 6 days</span></a></li>
+      <li><a href="friend-list.html"><time>14 Oct</time><b>Ben</b><span>in 6 days</span></a></li>
+      <li><a href="friend-list.html"><time>21 Oct</time><b>Priya</b><span>in 13 days</span></a></li>
+      <li><a href="friend-list.html"><time>29 Oct</time><b>Tom</b><span>in 21 days</span></a></li>
+    </ul>
+    <p class="hint">Showing the next 30 days.</p>
+  </section>
+</aside>
+</div>
+</main>
+<script>
+// mock only: October 2026, Monday first. today = Thu 8 Oct.
+const B={11:[['Dee','y']],14:[['Anna','y'],['Ben','p']],21:[['Priya','b']],25:[['You','me']],29:[['Tom','m']]};
+const next={'Dee':'Turns 29','Anna':'Turns 34','Ben':'','Priya':'','Tom':'Turns 40'};
+const grid=document.getElementById('grid');
+const cells=[];for(let i=0;i<35;i++){const d=new Date(2026,8,28+i);cells.push(d)}
+const names=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function show(d){
+  const list=B[d]||[];const dt=new Date(2026,9,d);
+  const h=names[dt.getDay()]+' '+d+' October';
+  let html='<h2>'+h+'</h2>';
+  if(!list.length){html+='<p class="muted" style="margin:0">No birthdays.</p>';}
+  else{html+='<ul class="who-list">'+list.map(([n,c])=>c==='me'?'<li><div><b>You</b><small>Your birthday</small></div></li>':'<li><div><b>'+n+'</b><small>'+(next[n]||'Birthday')+'</small></div><button type="button" class="quiet" aria-label="'+n+'’s list">Their list</button></li>').join('')+'</ul>';}
+  document.getElementById('dayp').innerHTML=html;
+}
+cells.forEach(dt=>{
+  const out=dt.getMonth()!==9,d=dt.getDate();
+  const b=document.createElement('button');b.type='button';
+  b.className='day'+(out?' out':'')+(!out&&d===8?' today':'');
+  const list=out?[]:(B[d]||[]);
+  b.setAttribute('aria-pressed',(!out&&d===14)?'true':'false');
+  b.setAttribute('aria-label',d+' '+['September','October','November'][dt.getMonth()-8]+(list.length?': '+list.map(x=>x[0]).join(', '):''));
+  b.innerHTML='<span class="n">'+d+'</span>'+list.slice(0,3).map(([n,c])=>'<span class="bd '+c+'" aria-hidden="true">'+n+'</span>').join('')+(list.length>3?'<span class="more">+'+(list.length-3)+' more</span>':'');
+  if(!out)b.onclick=()=>{grid.querySelectorAll('.day').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');show(d)};
+  grid.appendChild(b);
+});
+show(14);
+</script>
+</body></html>

@@ -139,7 +139,7 @@ func (a *App) queue(u *User, notification bool, subject, body string) {
 	m := Mail{ID: token(), To: u.Email, Subject: subject, Next: time.Now()}
 	if notification {
 		m.Unsub = a.unsubToken(u)
-		m.Body = body + "\n\n--\nYou’re getting this because you’re taking part in a gift exchange on Gifty.\nStop these emails: " + a.base + "/#unsubscribe/" + m.Unsub + "\n"
+		m.Body = body + "\n\n--\nYou’re getting this because you have a Gifty account.\nStop these emails: " + a.base + "/#unsubscribe/" + m.Unsub + "\n"
 	} else {
 		m.Body = body + "\n\n--\nGifty, " + a.base + "\n"
 		// Only account emails count towards the confirmation resend cooldown.
@@ -208,6 +208,15 @@ func longDate(s string) string {
 // inboxes are shared, previewed and forwarded, so it stays behind sign-in.
 func (a *App) drawn(e *Exchange) {
 	organiser := a.state.Users[e.Owner].Name
+	if e.Kind == kindElephant {
+		for _, id := range e.Members {
+			a.queue(a.state.Users[id], true, "Draw a number: "+e.Name, fmt.Sprintf("%s has closed entries for %s. Everyone is in, so it’s time to draw a number for the order of picking.\n\nSign in and draw yours:\n%s/#exchange/%s\n\nDate: %s\nSpending limit per gift: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
+		}
+		for _, id := range e.Members {
+			a.dueReminders(e, id, time.Now())
+		}
+		return
+	}
 	for _, id := range e.Members {
 		a.queue(a.state.Users[id], true, "Draw a name: "+e.Name, fmt.Sprintf("%s has closed entries for %s. Everyone is in, so it’s time to draw a name.\n\nSign in and draw a name to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nDate: %s\nSpending limit: %s", organiser, e.Name, a.base, e.ID, longDate(e.Date), money(e)))
 	}
@@ -228,7 +237,7 @@ func daysUntil(date string, now time.Time) int {
 func (a *App) remind(now time.Time) bool {
 	changed := false
 	for _, e := range a.state.Exchanges {
-		if e.Archived || len(e.Assignments) == 0 {
+		if e.Archived || !e.live() {
 			continue
 		}
 		days := daysUntil(e.Date, now)
@@ -246,6 +255,10 @@ func (a *App) remind(now time.Time) bool {
 				continue
 			}
 			changed = true
+			if e.Kind != "" {
+				a.queue(a.state.Users[id], true, fmt.Sprintf("Reminder: %s is %s", e.Name, when), a.kindReminder(e, when))
+				continue
+			}
 			a.queue(a.state.Users[id], true, fmt.Sprintf("Reminder: %s is %s", e.Name, when), fmt.Sprintf("%s is %s, on %s.\n\nSpending limit: %s\n\nSign in to see who you’re buying for and their wish list:\n%s/#exchange/%s\n\nIs their gift already ready? Press “Mark gift as ready” on the exchange page to stop these reminders. You can also change when you get reminders there.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID))
 		}
 	}
@@ -256,7 +269,11 @@ func (a *App) remind(now time.Time) bool {
 // mail server never blocks requests. Failed messages back off and retry.
 func (a *App) tick(now time.Time) {
 	a.mu.Lock()
-	if a.remind(now) {
+	changed := a.remind(now)
+	if a.birthdays(now) {
+		changed = true
+	}
+	if changed {
 		if err := a.save(); err != nil {
 			log.Printf("saving reminders: %v", err)
 		}
@@ -376,4 +393,12 @@ func smtpSender(host, port, user, pass, from string) func(string, []byte) error 
 func logSender(to string, msg []byte) error {
 	log.Printf("email to %s:\n%s", to, msg)
 	return nil
+}
+
+// kindReminder is the reminder for an exchange that isn't a Secret Santa. Like every email it never names who a gift is for.
+func (a *App) kindReminder(e *Exchange, when string) string {
+	if e.Kind == kindGroup {
+		return fmt.Sprintf("%s is %s, on %s.\n\nSpending limit: %s\n\nSign in to see the list and what has been taken:\n%s/#exchange/%s\n\nYou can change when you get reminders on the exchange page.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID)
+	}
+	return fmt.Sprintf("%s is %s, on %s.\n\nBring one wrapped gift, up to %s.\n\nSign in to see your place in the order:\n%s/#exchange/%s\n\nIs your gift already wrapped? Press “Mark gift as ready” on the exchange page to stop these reminders. You can also change when you get reminders there.", e.Name, when, longDate(e.Date), money(e), a.base, e.ID)
 }
