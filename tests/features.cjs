@@ -11,7 +11,7 @@ const shots=process.env.GIFTY_SCREENSHOTS,shot=async(p,n)=>{if(shots)await p.scr
 (async()=>{
 const browser=await chromium.launch({...(process.env.GIFTY_CHROME?{executablePath:process.env.GIFTY_CHROME}:{}),headless:true});
 const errors=[];
-const open=async()=>{const ctx=await browser.newContext({viewport:{width:1280,height:1000},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));if(process.env.DEBUG_API)p.on('response',r=>{if(r.request().method()==='POST'&&r.url().includes('/api/'))r.text().then(x=>console.log(r.status(),r.url().replace(/.*\/api\//,''),x.slice(0,160)))});return p};
+const open=async()=>{const ctx=await browser.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',viewport:{width:1280,height:1000},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));if(process.env.DEBUG_API)p.on('response',r=>{if(r.request().method()==='POST'&&r.url().includes('/api/'))r.text().then(x=>console.log(r.status(),r.url().replace(/.*\/api\//,''),x.slice(0,160)))});return p};
 const names=['Alex','Bea','Cara','Dev'],pages={};
 const wish=async(p,title)=>{await p.getByRole('link',{name:'Wish list',exact:true}).click();await p.getByRole('button',{name:'Add idea'}).click();await p.getByLabel('What is it?').fill(title);await p.getByRole('button',{name:'Save',exact:true}).click();await p.getByRole('heading',{name:title}).waitFor()};
 // Alex organises an exchange dated today, so the reveal is available straight away.

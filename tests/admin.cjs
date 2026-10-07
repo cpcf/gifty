@@ -6,7 +6,7 @@ const mails=()=>fs.readFileSync(logf,'utf8').replace(/=\r?\n/g,'').replace(/=([0
 const audit=async p=>{await p.waitForTimeout(200);const r=await new AxeBuilder({page:p}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(r.violations.map(v=>v.id+' '+v.nodes.map(n=>n.target).join()),[])};
 const pw='a long enough password';
 (async()=>{const b=await chromium.launch({...(process.env.GIFTY_CHROME?{executablePath:process.env.GIFTY_CHROME}:{}),headless:true});const errors=[];
-const sign=async(name,email)=>{const c=await b.newContext({viewport:{width:390,height:844}});const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/#signup');await p.getByLabel('Your name').fill(name);await p.getByLabel('Email address').fill(email);await p.getByLabel('Password',{exact:true}).fill(pw);await p.getByRole('button',{name:'Create an account'}).click();await p.getByRole('link',{name:'Account',exact:true}).waitFor();return p};
+const sign=async(name,email)=>{const c=await b.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',viewport:{width:390,height:844}});const p=await c.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/#signup');await p.getByLabel('Your name').fill(name);await p.getByLabel('Email address').fill(email);await p.getByLabel('Password',{exact:true}).fill(pw);await p.getByRole('button',{name:'Create an account'}).click();await p.getByRole('link',{name:'Account',exact:true}).waitFor();return p};
 const s=Date.now(),boss=await sign('Boss','boss@example.com').catch(()=>null);
 // The admin address must be confirmed first.
 const bp=boss||(()=>{throw Error('could not sign up the admin; use a fresh data file')})();

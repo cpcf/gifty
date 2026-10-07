@@ -12,7 +12,7 @@ const future=days=>{const d=new Date(Date.now()+days*864e5);return new Date(d.ge
 (async()=>{
 const browser=await chromium.launch({...(process.env.GIFTY_CHROME?{executablePath:process.env.GIFTY_CHROME}:{}),headless:true});
 const errors=[];
-const open=async(width=1280)=>{const ctx=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));return p};
+const open=async(width=1280)=>{const ctx=await browser.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',viewport:{width,height:1000},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));return p};
 const email=name=>`${name.toLowerCase()}${stamp}@example.com`,PASSWORD='a sufficiently long password';
 const signup=async name=>{const p=await open();await p.goto(base);await p.locator('header').getByRole('link',{name:'Create an account'}).click();await p.getByLabel('Your name').fill(name);await p.getByLabel('Email address').fill(email(name));await p.getByLabel('Password',{exact:true}).fill(PASSWORD);await p.getByRole('button',{name:'Create an account',exact:true}).click();await p.getByRole('heading',{name:'Exchanges',exact:true}).waitFor();return p};
 const call=(p,path,body)=>p.evaluate(async([path,body])=>{const r=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,json:await r.json().catch(()=>null)}},[path,body]);

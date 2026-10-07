@@ -1,0 +1,26 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright, axe and Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser" playwright @axe-core/playwright
+          NODE_PATH="$RUNNER_TEMP/browser/node_modules" "$RUNNER_TEMP/browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Run every test
+        env:
+          NODE_PATH: ${{ runner.temp }}/browser/node_modules
+        run: tests/run-all.sh

@@ -6,7 +6,7 @@ const mails=()=>fs.readFileSync(logf,'utf8').replace(/=\r?\n/g,'').replace(/=([0
 const tok=(to,route)=>{const all=mails().split('email to ').filter(m=>m.startsWith(to));const m=[...all.at(-1).matchAll(new RegExp('#'+route+'/([A-Za-z0-9_-]+)','g'))];assert(m.length,'no '+route+' link for '+to);return m.at(-1)[1]};
 const audit=async p=>{await p.waitForTimeout(200);const r=await new AxeBuilder({page:p}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(r.violations.map(v=>v.id+' '+v.nodes.map(n=>n.target).join()),[])};
 (async()=>{const b=await chromium.launch({...(process.env.GIFTY_CHROME?{executablePath:process.env.GIFTY_CHROME}:{}),headless:true});const errors=[];
-const ctx=await b.newContext({viewport:{width:390,height:844}});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));const s=Date.now();const ana='ana'+s+'@example.com';
+const ctx=await b.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',viewport:{width:390,height:844}});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));const s=Date.now();const ana='ana'+s+'@example.com';
 await p.goto(base+'/#signup');await p.getByLabel('Your name').fill('Ana Lima');await p.getByLabel('Email address').fill(ana);await p.getByLabel('Password',{exact:true}).fill('first long password');await p.getByRole('button',{name:'Create an account'}).click();
 await p.getByText('Confirm your email address to get emails').waitFor();await audit(p);await p.waitForTimeout(4600);await p.screenshot({path:out+'/mail-notice.png'});
 await p.getByRole('link',{name:'Account',exact:true}).click();await p.getByRole('button',{name:'Send the link again'}).waitFor();await audit(p);await p.screenshot({path:out+'/mail-account-unverified.png',fullPage:true});
@@ -20,7 +20,7 @@ await bm().uncheck();await p.getByText('Birthday emails turned off.').waitFor();
 assert(await p.getByRole('checkbox',{name:'Email me about my exchanges'}).isChecked(),'one switch moved the other');
 await bm().check();await p.getByText('Birthday emails turned on.').waitFor();await audit(p);
 // Two more people and a draw, through the API.
-const others=[];for(const n of ['Ben','Cat']){const c=await b.newContext();const q=await c.newPage();await q.goto(base);await q.evaluate(async([n,s])=>{await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,email:n+s+'@example.com',password:'another long password'})})},[n,s]);others.push(q)}
+const others=[];for(const n of ['Ben','Cat']){const c=await b.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',locale:process.env.GIFTY_LOCALE||'en-GB'});const q=await c.newPage();await q.goto(base);await q.evaluate(async([n,s])=>{await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,email:n+s+'@example.com',password:'another long password'})})},[n,s]);others.push(q)}
 const e=await p.evaluate(async()=>{const r=await fetch('/api/exchanges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Office swap',date:'2099-12-18',budget:'20',currency:'GBP',note:''})});return r.json()});
 for(const q of others)await q.evaluate(async code=>{await fetch('/api/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})})},e.invite);
 await p.evaluate(async id=>{await fetch('/api/exchanges/'+id+'/draw',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})},e.id);

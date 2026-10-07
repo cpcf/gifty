@@ -1,0 +1,16 @@
+#!/bin/sh
+# Runs the tests before a commit that changes code. Docs-only commits skip them.
+#   SKIP_TESTS=1 git commit ...     skips them for one commit (so does git commit --no-verify)
+# It tests the working tree, which is what is committed unless you have unstaged changes (it says so if you do).
+# Install with tests/install-hooks.sh.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+[ -n "${SKIP_TESTS:-}" ] && { echo "pre-commit: SKIP_TESTS set, not running tests."; exit 0; }
+changed=$(git diff --cached --name-only --diff-filter=ACMRD)
+code=$(printf '%s\n' "$changed" | grep -E '\.(go|js|cjs|css|html|svg|woff2)$|^go\.(mod|sum)$|^web/|^tests/|^\.githooks/|^\.github/workflows/') || true
+if [ -z "$code" ]; then echo "pre-commit: no code changes, not running tests."; exit 0; fi
+echo "pre-commit: code changed ($(printf '%s\n' "$code" | wc -l | tr -d ' ') files), running tests/run-all.sh auto"
+if ! git diff --quiet; then echo "pre-commit: note: you have unstaged changes, and they are part of this test run."; fi
+if FAIL_FAST=1 tests/run-all.sh auto; then exit 0; fi
+echo
+echo "pre-commit: tests failed, commit stopped. Fix them, or skip once with SKIP_TESTS=1 git commit ..." >&2
+exit 1

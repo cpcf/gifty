@@ -7,6 +7,14 @@ tests/run-all.sh          # everything below, each browser suite on its own serv
 tests/run-all.sh quick    # the same without the (slow) race detector
 ```
 
+`tests/run-all.sh fast` skips the browser suites (Go tests, vet, gofmt, syntax and unit tests only), and `tests/run-all.sh auto` runs `quick` when Playwright and axe are installed and otherwise `fast`, saying so. Set `FAIL_FAST=1` to stop at the first failure.
+
+### Automatic runs
+
+- **Commit hook:** `tests/install-hooks.sh` points this clone at `.githooks/`, whose `pre-commit` runs `tests/run-all.sh auto` (with `FAIL_FAST`) when a commit touches code (`.go`, `web/`, `tests/`, `go.mod`, the hooks or the workflow) and skips docs-only commits. A failure stops the commit. `SKIP_TESTS=1 git commit ...` or `git commit --no-verify` skips it once. It tests the working tree, so unstaged changes are part of the run (it says so). Without Playwright it runs only the non-browser tests and prints a warning saying that. It leaves out the race detector, which takes a few minutes, so that stays for CI.
+- **CI:** `.github/workflows/test.yml` runs everything, including `go test -race` and every browser suite in Chromium, on each push and pull request. It installs Playwright and axe itself. It has not been run on GitHub yet, so treat the first run as its own test.
+- Browser suites use a fixed locale (`en-GB`) so results do not depend on the machine; set `GIFTY_LOCALE=en-US` to run them in another (the two newer suites are checked in both).
+
 That is, in turn:
 
 ```sh

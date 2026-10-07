@@ -11,7 +11,7 @@ const future=(days)=>{const d=new Date(Date.now()+days*864e5);return new Date(d.
 (async()=>{
 const browser=await chromium.launch({...(process.env.GIFTY_CHROME?{executablePath:process.env.GIFTY_CHROME}:{}),headless:true});
 const errors=[];
-const open=async(width=1280)=>{const ctx=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));return p};
+const open=async(width=1280)=>{const ctx=await browser.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',viewport:{width,height:1000},reducedMotion:'reduce'});const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));return p};
 const signup=async(name)=>{const p=await open();await p.goto(base);await p.locator('header').getByRole('link',{name:'Create an account'}).click();await p.getByLabel('Your name').fill(name);await p.getByLabel('Email address').fill(`${name.toLowerCase()}${stamp}@example.com`);await p.getByLabel('Password',{exact:true}).fill('a sufficiently long password');await p.getByRole('button',{name:'Create an account',exact:true}).click();await p.getByRole('heading',{name:'Exchanges',exact:true}).waitFor();return p};
 const noOverflow=async(p,what)=>assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true,`${what} overflows horizontally`);
 const nav=async(p,name)=>{await p.locator('header nav').getByRole('link',{name,exact:true}).click()};
