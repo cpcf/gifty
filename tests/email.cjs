@@ -14,6 +14,11 @@ await p.waitForTimeout(500);await new Promise(r=>setTimeout(r,1500));
 await p.goto(base+'/#verify/'+tok(ana,'verify'));await p.getByRole('heading',{name:'Email address confirmed'}).waitFor();await audit(p);
 await p.getByRole('link',{name:'Go to exchanges'}).click();await p.getByRole('heading',{name:'Exchanges',exact:true}).waitFor();assert.equal(await p.getByText('Confirm your email address to get emails').count(),0);
 await p.getByRole('link',{name:'Account',exact:true}).click();const box=p.getByRole('checkbox',{name:'Email me about my exchanges'});await box.waitFor();assert(await box.isChecked());await box.uncheck();await p.getByText('Exchange emails turned off.').waitFor();await box.check();await p.getByText('Exchange emails turned on.').waitFor();await p.screenshot({path:out+'/mail-account.png',fullPage:true});
+// Friends' birthday emails have their own switch, on by default, which sticks.
+const bm=()=>p.getByRole('checkbox',{name:/^Email me about friends/});await bm().waitFor();assert(await bm().isChecked(),'birthday emails should start on');
+await bm().uncheck();await p.getByText('Birthday emails turned off.').waitFor();await p.reload();await bm().waitFor();assert(!(await bm().isChecked()),'the birthday email choice was lost');
+assert(await p.getByRole('checkbox',{name:'Email me about my exchanges'}).isChecked(),'one switch moved the other');
+await bm().check();await p.getByText('Birthday emails turned on.').waitFor();await audit(p);
 // Two more people and a draw, through the API.
 const others=[];for(const n of ['Ben','Cat']){const c=await b.newContext();const q=await c.newPage();await q.goto(base);await q.evaluate(async([n,s])=>{await fetch('/api/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,email:n+s+'@example.com',password:'another long password'})})},[n,s]);others.push(q)}
 const e=await p.evaluate(async()=>{const r=await fetch('/api/exchanges',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Office swap',date:'2099-12-18',budget:'20',currency:'GBP',note:''})});return r.json()});

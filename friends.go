@@ -249,6 +249,9 @@ func (a *App) friendsAPI(u *User, parts []string, r *http.Request) (any, error) 
 			return a.friendsView(u), nil
 		}
 	}
+	if len(parts) == 0 || len(parts) > 2 {
+		return nil, problem{404, "Page not found."}
+	}
 	// /api/friends/{id} and /api/friends/{id}/claim
 	v := a.state.Users[parts[0]]
 	if v == nil || !areFriends(u, v) {

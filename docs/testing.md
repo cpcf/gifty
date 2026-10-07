@@ -3,12 +3,21 @@
 ## Go
 
 ```sh
-go test -race ./...
-go vet ./...
-node --check web/app.js
+tests/run-all.sh          # everything below, each browser suite on its own server and data file
+tests/run-all.sh quick    # the same without the (slow) race detector
 ```
 
-Statement coverage is about 87% (`go test -cover ./...`). The tests cover:
+That is, in turn:
+
+```sh
+go test -race ./...
+go vet ./...
+gofmt -l .
+node --check web/*.js tests/*.cjs
+node tests/unit.cjs
+```
+
+Statement coverage is about 88% (`go test -cover ./...`). The tests cover:
 
 - access control and privacy between members and outsiders
 - draws over 3–100 people
@@ -24,20 +33,36 @@ Statement coverage is about 87% (`go test -cover ./...`). The tests cover:
 - the server key file
 - friends: requests and acceptance (own link, bad link, replaced link, duplicates, caps, mutual requests, ending it), birthdays (validation, 29 February, hidden birthdays, the date arithmetic), the ideas friends can and cannot see, marks (never sent to the owner or the person a group gift is for, seen by other friends and by givers, released on sorting, unfriending and deletion, lapsing after the birthday, photos limited to the chosen audience), birthday emails (once each, opt-outs, no hint of gifts) and the birthday calendar file
 - white elephant (kind fixed at creation, steals validation, uniform pick order, no recipients, messages and keep apart refused, closed to new people) and group gifts (friends only, never visible to the person they are for, reminders that skip what is already late and never reach or name them, removed with that person's account)
+- the new endpoints refuse everyone without a session and every POST that doesn't come from the page; refuse broken JSON, unknown fields, other content types and unknown paths; and answer unknown people and ideas with the same plain 404
+- friend, request and waiting limits; cancelling and declining only your own requests; claiming an idea you hold after it was sorted; friends-only ideas and their photos staying from givers (and a giver's claim ending when an idea is kept from givers, while a friend's survives a change of exchanges)
+- group gifts through their life (edit can't change who it is for, removing and leaving, archiving), white elephants through theirs (leaving and removal before and after entries close, a deleted account keeping its place, reminders that stop when the gift is ready)
+- ideas: limits, validation, edits that keep what wasn't sent; friends, birthdays and kinds surviving a restart; a data file from before any of this still loading
 - keeping pairs apart (feasibility, tight rules, 100 people, pruning, one pair per person, organiser-only), anonymous messages (privacy between members, limits, email only when a conversation changes hands), claims and sorted ideas (never shown to the owner, cleaned up with accounts and exchanges), reveal day and the calendar file
 
 ## Browser
 
-Six suites drive Chrome with Playwright. Each runs axe (WCAG 2 A/AA and 2.1 AA) on the pages it visits and fails on any uncaught script error.
+Eight suites drive Chrome with Playwright. Each runs axe (WCAG 2 A/AA and 2.1 AA) on the pages it visits and fails on any uncaught script error.
 
 - `tests/browser.cjs`: signup, invitations, closing entries with three people, each person drawing a name, the covered ticket and its keyboard reveal (no name in the page while covered), wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px with no horizontal overflow.
 - `tests/email.cjs`: confirmation, account settings, the draw-a-name email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It needs a server with `GIFTY_SMTP_HOST=log`.
 - `tests/admin.cjs`: the admin page (hidden until the admin address is confirmed, and from everyone else), removing an account, and deleting your own account with a wrong and a right password. It needs a server with `GIFTY_SMTP_HOST=log`, `GIFTY_ADMINS=boss@example.com` and a fresh data file.
 - `tests/features.cjs`: four people, keep apart, anonymous messages with focus handling, claiming and sorting ideas, the calendar file and reveal day, with axe on each state and a phone-width check. It needs a fresh data file and no mail; the exchange is dated today so the reveal is available.
 - `tests/friends.cjs`: four people (and a fifth arriving through a signed-out friend link) becoming friends, a birthday on the calendar (desktop, 390px and 320px, no overflow, day buttons at least 44px), the three idea audiences, marking an idea (focus after marking, other friends see it taken, the owner's page contains no trace), a white elephant from creation to each person drawing a number, and a group gift that the person it is for can't join or see. It needs a fresh data file and no mail.
+- `tests/friends-more.cjs`: what the first friends suite doesn't reach. Four birthdays on one day (three chips and "+1 more" on desktop, three stripes on a phone, everyone named in words), a 29 February birthday on 28 February in a plain year and 29 February in a leap one, year labels on the month buttons at the end of December, arrow keys across a month end, declining and cancelling requests, putting an idea down (the holder is told, others stop seeing it, putting it back), changing who sees an idea (marks end), removing a friend (cancel, confirm, marks released, the page gone), replacing the friend link, hiding and removing a birthday and the form's mistakes, the birthdays-soon notice, the kind picker with no friends, editing a white elephant's steals, a group gift's invitation preview and leaving it, and every new page and endpoint signed out. It needs a fresh data file and no mail.
 - `tests/gate.cjs`: the invite-only page in place of both signup and sign-in, refusal of direct API signups and logins, wrong and right codes, invited guests getting past the code, and security headers. It needs a server with an access code set.
 
+`tests/unit.cjs` runs the pure date and wording helpers in `web/friends.js` (leap years, the next birthday, counting days, ordinals, UTC formatting) in six time zones, including ones a day either side of UTC, with no browser or server. It was checked by breaking the code on purpose and seeing it fail.
+
 Automated accessibility checks are evidence, not a certification; no screen-reader testing has been done.
+
+### What is not tested automatically
+
+- The SMTP sender (a real server over STARTTLS), the mail and alert loops and `main` itself: they are exercised by hand, and the log sender only in the email suite.
+- Deployment: `deploy/` scripts, the Caddy config and fail2ban filters.
+- How things look. The suites check structure, text, focus, contrast and overflow, not appearance; there are no screenshot comparisons, and screenshots are only saved on request (`GIFTY_SCREENSHOTS`).
+- Real phones and browsers other than Chrome; copy-to-clipboard and the native share sheet; photo drag and drop and paste.
+- Time passing for real: reminders and birthday emails are driven by calling the scheduler with chosen dates.
+- Screen readers, as above.
 
 ### Running the browser suites
 
