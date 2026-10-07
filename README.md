@@ -31,7 +31,14 @@ go build -o gifty .
 - Account deletion from the account page, and an admin page for the addresses in `GIFTY_ADMINS` to remove accounts and exchanges without touching the data file.
 - Archiving, and deletion of archived exchanges by their organiser. Responsive layouts, keyboard-accessible dialogs and inline form errors.
 
-Not included: exclusion rules, gift reservations and invitations by email (links are shared by hand). The server operator can read stored assignments, though the admin page never shows them: privacy is enforced between app users, not against whoever runs the server.
+- Keep apart: before closing entries the organiser can list pairs (couples, housemates) who must not draw each other. Each person can be in only one pair, because stacked pairs would let the organiser work out or force who buys for whom. The draw respects them, or refuses with a plain message if no arrangement exists. Only the organiser sees the list, and only until entries close.
+- Anonymous messages: the person buying for you can ask you a question and you answer, and neither learns who the other is. Each side can send up to 40 messages of up to 500 characters. With email on, a message sends one email when the conversation changes hands, never naming anyone.
+- "I'm getting this": a giver can mark an idea as theirs, so a giver in another exchange for the same person sees that someone has it. The recipient is never told, and a claim goes away with the exchange or account it came from, and its holder can always let it go.
+- Sorted ideas: mark an idea as "got it" or "don't want it any more" to hide it from whoever is buying for you, and put it back later. A giver who had marked it as theirs is told to check before buying.
+- Reveal day: from the day before the exchange date, the organiser can show everyone who bought for whom. It can't be undone, and works on archived exchanges.
+- Add to calendar: each exchange offers an all-day calendar file (`.ics`) for its date. The invitation link has a Share button on phones.
+
+Not included: invitations by email (links are shared by hand). The server operator can read stored assignments, though the admin page never shows them: privacy is enforced between app users, not against whoever runs the server.
 
 ## Configuration
 

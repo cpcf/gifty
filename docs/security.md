@@ -39,3 +39,12 @@ Gifty is built for a small, trusted audience, but it is meant to be safe on the 
 - The data file holds assignments in the clear: the server operator can read them. `GIFTY_SMTP_HOST=log` writes confirmation and reset links to the server log, so use it only for development.
 - A public deployment over plain HTTP would send session cookies unencrypted. Gifty logs a warning when cookies aren't marked Secure.
 - Sessions last 30 days and aren't rotated while in use.
+
+## Messages, claims and the reveal
+
+- A conversation belongs to one giver and their recipient. Each person is sent only the conversations they are in, and nothing in them names the other side. The server operator can read them, like assignments.
+- A claim on an idea is stored on the idea but only ever sent to givers: as "mine", or "other" for anyone else. The owner is never sent it.
+- Keep-apart pairs are sent only to the organiser, and only before the draw. They are not secret from the server operator.
+- Assignments are sent to members only after the organiser reveals them, from the day before the exchange date. That is one way. Once revealed, the exchange page names everyone's recipient, so the covered ticket no longer hides it.
+- Keep-apart pairs limit the draw, so each person can be in only one. Several pairs on one person would let the organiser (who also takes part) work out or force who they, or anyone, buys for or is bought for by.
+- Deleting an exchange deletes ideas meant only for it, so they are never shown more widely than their owner chose. Photos of sorted ideas stop being served to givers.

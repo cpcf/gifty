@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
 	"net/mail"
@@ -69,6 +68,13 @@ type Wish struct {
 	// Images are the idea's photos as data URIs, in display order. They live in the data file; clients
 	// are never sent them, only same-origin URLs to fetch the bytes from /image/.
 	Images []string `json:"images,omitempty"`
+	// Status is set by the owner when the idea no longer needs a gift: "got" (they have it) or "dropped" (they
+	// don't want it any more). Sorted ideas are hidden from the people buying for them.
+	Status string `json:"status,omitempty"`
+	// ClaimedBy is the giver who said they are getting this, and ClaimedIn the exchange they are giving in. The
+	// owner is never told; other givers see only that someone has it.
+	ClaimedBy string `json:"claimedBy,omitempty"`
+	ClaimedIn string `json:"claimedIn,omitempty"`
 }
 
 // wishOut is an idea as clients see it: photos are URLs, never the stored data.
@@ -80,10 +86,13 @@ type wishOut struct {
 	Price     string   `json:"price"`
 	Exchanges []string `json:"exchanges"`
 	Images    []string `json:"images,omitempty"`
+	Status    string   `json:"status,omitempty"`
+	// Claim is only sent to a giver: "mine" or "other".
+	Claim string `json:"claim,omitempty"`
 }
 
 func publicWish(w Wish) wishOut {
-	out := wishOut{ID: w.ID, Title: w.Title, URL: w.URL, Note: w.Note, Price: w.Price, Exchanges: w.Exchanges}
+	out := wishOut{ID: w.ID, Title: w.Title, URL: w.URL, Note: w.Note, Price: w.Price, Exchanges: w.Exchanges, Status: w.Status}
 	for i := range w.Images {
 		out.Images = append(out.Images, imageURL(w.ID, i))
 	}
@@ -92,14 +101,27 @@ func publicWish(w Wish) wishOut {
 
 func imageURL(wishID string, i int) string { return "/image/" + wishID + "/" + strconv.Itoa(i) }
 
-// wishesFor is what someone buying for u in exchange e can see.
-func wishesFor(u *User, e *Exchange) []wishOut {
+// wishesFor is what giver, who is buying for u in exchange e, can see. Sorted ideas are hidden, except from a
+// giver who had already said they were getting one, who is told it has changed.
+func wishesFor(u *User, e *Exchange, giver string) []wishOut {
 	out := []wishOut{}
 	for _, w := range u.Wishes {
-		if len(w.Exchanges) == 0 || slices.Contains(w.Exchanges, e.ID) {
-			w.Exchanges = nil
-			out = append(out, publicWish(w))
+		if len(w.Exchanges) != 0 && !slices.Contains(w.Exchanges, e.ID) {
+			continue
 		}
+		mine := w.ClaimedBy != "" && w.ClaimedBy == giver
+		if w.Status != "" && !mine {
+			continue
+		}
+		o := publicWish(w)
+		o.Exchanges = nil
+		switch {
+		case mine:
+			o.Claim = "mine"
+		case w.ClaimedBy != "":
+			o.Claim = "other"
+		}
+		out = append(out, o)
 	}
 	return out
 }
@@ -197,6 +219,19 @@ type Exchange struct {
 	MyReminders map[string][]Reminder `json:",omitempty"` // members' own schedules, overriding the default
 	Reminded    map[string][]string   `json:",omitempty"` // keys of reminders already sent (or skipped), per member
 	Ready       []string              `json:",omitempty"` // members with their gift ready to give, who want no more reminders
+	// Apart lists pairs who must not draw each other (couples, housemates). Only the organiser sees them, and only before the draw.
+	Apart [][2]string `json:",omitempty"`
+	// Revealed means the organiser has shown everyone who bought for whom.
+	Revealed bool `json:",omitempty"`
+	// Threads holds the anonymous conversations, one per giver (keyed by the giver's ID) with the person they buy for.
+	Threads map[string][]Message `json:",omitempty"`
+}
+
+// Message is one line of an anonymous conversation between a giver and their recipient.
+type Message struct {
+	FromGiver bool
+	Text      string
+	At        time.Time
 }
 type Session struct {
 	User    string
@@ -480,7 +515,7 @@ func (a *App) removeUser(u *User) error {
 		delete(e.Reminded, u.ID)
 		e.Ready = slices.DeleteFunc(e.Ready, func(m string) bool { return m == u.ID })
 		if len(e.Assignments) == 0 {
-			e.Members = slices.DeleteFunc(e.Members, func(m string) bool { return m == u.ID })
+			e.dropMember(u.ID)
 		} else {
 			kept = true
 		}
@@ -494,6 +529,7 @@ func (a *App) removeUser(u *User) error {
 		}
 	}
 	a.state.Outbox = slices.DeleteFunc(a.state.Outbox, func(m Mail) bool { return m.To == u.Email })
+	a.clearClaims(func(w *Wish) bool { return w.ClaimedBy == u.ID })
 	if !kept {
 		delete(a.state.Users, u.ID)
 		return nil
@@ -506,10 +542,16 @@ func (a *App) removeUser(u *User) error {
 func (a *App) removeExchange(id string) {
 	delete(a.state.Exchanges, id)
 	for _, v := range a.state.Users {
+		// An idea meant only for this exchange goes with it: with no exchange left in its scope it would
+		// otherwise be shown in every exchange, to people it was kept from.
+		v.Wishes = slices.DeleteFunc(v.Wishes, func(w Wish) bool {
+			return len(w.Exchanges) > 0 && !slices.ContainsFunc(w.Exchanges, func(x string) bool { return x != id })
+		})
 		for i := range v.Wishes {
 			v.Wishes[i].Exchanges = slices.DeleteFunc(v.Wishes[i].Exchanges, func(x string) bool { return x == id })
 		}
 	}
+	a.clearClaims(func(w *Wish) bool { return w.ClaimedIn == id })
 }
 func (a *App) byToken(match func(*User) bool) *User {
 	for _, u := range a.state.Users {
@@ -572,9 +614,10 @@ func (a *App) exchange(e *Exchange, u *User) any {
 	}
 	if id := e.Assignments[u.ID]; id != "" {
 		m := a.state.Users[id]
-		v["recipient"] = map[string]any{"id": m.ID, "name": m.Name, "wishes": wishesFor(m, e)}
+		v["recipient"] = map[string]any{"id": m.ID, "name": m.Name, "wishes": wishesFor(m, e, u.ID)}
 		v["ready"] = slices.Contains(e.Ready, u.ID)
 	}
+	a.exchangeExtras(v, e, u)
 	return v
 }
 
@@ -629,7 +672,10 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 	if err == nil && r.Method == "POST" {
 		err = a.save()
 		if err != nil {
-			json.Unmarshal(before, &a.state)
+			var restored State
+			if json.Unmarshal(before, &restored) == nil {
+				a.state = restored
+			}
 		}
 	}
 	if err != nil {
@@ -677,7 +723,7 @@ func (a *App) serveImage(w http.ResponseWriter, r *http.Request) {
 			if owner.ID != u.ID {
 				allowed := false
 				for _, e := range a.state.Exchanges {
-					if e.Assignments[u.ID] == owner.ID && (len(wish.Exchanges) == 0 || slices.Contains(wish.Exchanges, e.ID)) {
+					if e.Assignments[u.ID] == owner.ID && (len(wish.Exchanges) == 0 || slices.Contains(wish.Exchanges, e.ID)) && (wish.Status == "" || wish.ClaimedBy == u.ID) {
 						allowed = true
 						break
 					}
@@ -1148,6 +1194,9 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			w = u.Wishes[index] // keeps the stored photos unless in.Photos replaces them
 		}
 		w.Title, w.URL, w.Note, w.Price, w.Exchanges = in.Title, in.URL, in.Note, in.Price, scope
+		if len(scope) > 0 && !slices.Contains(scope, w.ClaimedIn) {
+			w.ClaimedBy, w.ClaimedIn = "", ""
+		}
 		if in.Photos != nil {
 			if len(*in.Photos) > maxImages {
 				return nil, bad(fmt.Sprintf("An idea can have up to %d photos.", maxImages))
@@ -1179,6 +1228,12 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			u.Wishes = append(u.Wishes, w)
 		} else {
 			u.Wishes[index] = w
+		}
+		return a.publicUser(u), nil
+	}
+	if id, ok := strings.CutSuffix(strings.TrimPrefix(path, "wishes/"), "/status"); ok && strings.HasPrefix(path, "wishes/") && r.Method == "POST" {
+		if err := a.setStatus(u, id, r); err != nil {
+			return nil, err
 		}
 		return a.publicUser(u), nil
 	}
@@ -1251,7 +1306,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if len(e.Assignments) > 0 || e.Archived {
 			return nil, bad("Membership is locked for this exchange.")
 		}
-		e.Members = slices.DeleteFunc(e.Members, func(id string) bool { return id == u.ID })
+		e.dropMember(u.ID)
 		return map[string]bool{"ok": true}, nil
 	}
 	if action == "my-reminders" {
@@ -1297,6 +1352,18 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		}
 		return a.exchange(e, u), nil
 	}
+	if action == "message" || action == "claim" {
+		var err error
+		if action == "message" {
+			err = a.say(e, u, r)
+		} else {
+			err = a.claim(e, u, r)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return a.exchange(e, u), nil
+	}
 	if action == "delete" {
 		// Deleting is permanent for everyone in the exchange, so it is for organisers, and only once it is archived.
 		if e.Owner != u.ID {
@@ -1311,10 +1378,24 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	if e.Owner != u.ID {
 		return nil, problem{403, "Only the organiser can do that."}
 	}
+	if action == "reveal" {
+		// Archiving doesn't stop the organiser showing everyone who bought for whom.
+		if err := a.reveal(e); err != nil {
+			return nil, err
+		}
+		return a.exchange(e, u), nil
+	}
 	if e.Archived {
 		return nil, bad("This exchange is archived.")
 	}
 	switch action {
+	case "apart":
+		if len(e.Assignments) > 0 {
+			return nil, bad("Pairs can’t be changed once entries are closed.")
+		}
+		if err := a.setApart(e, r); err != nil {
+			return nil, err
+		}
 	case "reminders":
 		// Unlike the other details, the schedule can change after the draw.
 		var in struct{ Reminders []Reminder }
@@ -1356,7 +1437,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if in.ID == u.ID {
 			return nil, bad("The organiser must stay in the exchange.")
 		}
-		e.Members = slices.DeleteFunc(e.Members, func(id string) bool { return id == in.ID })
+		e.dropMember(in.ID)
 	case "draw":
 		if len(e.Assignments) > 0 {
 			return nil, bad("Entries are already closed.")
@@ -1364,7 +1445,11 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if len(e.Members) < 3 {
 			return nil, bad("You need at least three people to close entries.")
 		}
-		e.Assignments = draw(e.Members)
+		as, ok := draw(e.Members, e.Apart)
+		if !ok {
+			return nil, bad("The pairs kept apart leave someone with nobody to draw. Remove a pair and try again.")
+		}
+		e.Assignments = as
 		a.drawn(e)
 	default:
 		return nil, problem{404, "Page not found."}
@@ -1469,39 +1554,11 @@ func details(r *http.Request, e *Exchange) error {
 	e.Note = strings.TrimSpace(in.Note)
 	return nil
 }
-func draw(ids []string) map[string]string {
-	// Rejection sampling yields a uniform random derangement, including separate cycles.
-	recipients := slices.Clone(ids)
-	for {
-		for i := len(recipients) - 1; i > 0; i-- {
-			n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
-			if err != nil {
-				panic(err)
-			}
-			j := int(n.Int64())
-			recipients[i], recipients[j] = recipients[j], recipients[i]
-		}
-		valid := true
-		for i, id := range ids {
-			if id == recipients[i] {
-				valid = false
-				break
-			}
-		}
-		if valid {
-			break
-		}
-	}
-	out := map[string]string{}
-	for i, id := range ids {
-		out[id] = recipients[i]
-	}
-	return out
-}
 func (a *App) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/", a.serveAPI)
 	mux.HandleFunc("/image/", a.serveImage)
+	mux.HandleFunc("/calendar/", a.serveCalendar)
 	// Embedded files have no modification time, so content hashes let browsers revalidate instead of re-downloading.
 	type file struct {
 		body []byte

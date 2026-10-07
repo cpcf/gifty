@@ -301,6 +301,27 @@ dialog .draw-list+.muted{margin:8px 0 0;font-size:14px}
 .hero-art .tickets{margin-bottom:6px}
 .hero-art p{font-size:14px;margin:10px 0 0}
 .invited{margin:0}
+/* Keep apart, messages, claims and sorted ideas */
+.apart-list{list-style:none;padding:0;margin:0 0 12px;border-top:2px solid var(--ink)}
+.apart-list li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0 4px 0;border-bottom:1px solid var(--rule);font-weight:600}
+.apart-list .quiet{flex:none;font-weight:500;padding-right:0}
+.facts .cal{display:flex;align-items:center;min-height:44px;margin-bottom:-12px;font-size:14px;font-weight:400}
+#talk{margin-top:32px}
+.thread+.thread{margin-top:28px}
+.thread .hint{margin:0 0 12px}
+.new{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--yellow);padding:1px 6px;border-radius:2px;vertical-align:middle}
+.chat{list-style:none;padding:0;margin:0 0 16px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:min(520px,92%);padding:10px 14px;background:var(--sheet);border:1px solid var(--rule);border-radius:3px;align-self:flex-start}
+.msg.mine{align-self:flex-end;border-color:var(--ink);background:var(--paper)}
+.msg .label{margin-bottom:2px}
+.msg p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg time{display:block;margin-top:4px;font-size:12px;color:var(--muted)}
+.thread textarea{min-height:72px}
+.claim{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:8px}
+.claim .tag,.wishes .tag{margin:0;font-size:14px;font-weight:600;color:var(--ink)}
+.wishes .tag{margin-bottom:6px}
+button.small{padding:6px 12px;font-size:14px}
+.tk .drew{font-weight:400}
 @media(max-width:1000px){
 }
 @media(max-width:640px){

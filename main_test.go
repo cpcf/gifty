@@ -225,7 +225,7 @@ func TestDrawProperties(t *testing.T) {
 			ids = append(ids, fmt.Sprint(i))
 		}
 		for k := 0; k < 20; k++ {
-			d := draw(ids)
+			d, _ := draw(ids, nil)
 			seen := map[string]bool{}
 			for _, id := range ids {
 				to := d[id]
@@ -299,7 +299,7 @@ func TestWishesScopedToExchanges(t *testing.T) {
 	ben := a.byToken(func(u *User) bool { return u.Email == "ben@example.com" }).ID
 	titles := func(ex string) []string {
 		var out []string
-		for _, w := range wishesFor(a.state.Users[ben], a.state.Exchanges[ex]) {
+		for _, w := range wishesFor(a.state.Users[ben], a.state.Exchanges[ex], "") {
 			out = append(out, w.Title)
 			if w.Exchanges != nil {
 				t.Fatal("recipient view reveals the giver's other exchanges")
@@ -436,7 +436,7 @@ func TestWishPhotos(t *testing.T) {
 		dataURI("image/png", []byte("hello")), // no image magic
 		"data:image/png;base64,not base64!",
 		"data:image/png;base64,",
-		"data:image/png," + string(testPNG), // not base64
+		"data:image/png," + string(testPNG),                              // not base64
 		"image/png;base64," + base64.StdEncoding.EncodeToString(testPNG), // not a data URI
 	} {
 		ana.req("POST", "wishes", map[string]any{"title": "Bad photo", "photos": []string{image}}, 400)

@@ -22,14 +22,16 @@ Statement coverage is about 81% (`go test -cover ./...`). The tests cover:
 - origin checks on writes
 - security events being logged without credentials, and burst alerts and daily summaries being emailed
 - the server key file
+- keeping pairs apart (feasibility, tight rules, 100 people, pruning, one pair per person, organiser-only), anonymous messages (privacy between members, limits, email only when a conversation changes hands), claims and sorted ideas (never shown to the owner, cleaned up with accounts and exchanges), reveal day and the calendar file
 
 ## Browser
 
-Four suites drive Chrome with Playwright. Each runs axe (WCAG 2 A/AA and 2.1 AA) on the pages it visits and fails on any uncaught script error.
+Five suites drive Chrome with Playwright. Each runs axe (WCAG 2 A/AA and 2.1 AA) on the pages it visits and fails on any uncaught script error.
 
 - `tests/browser.cjs`: signup, invitations, closing entries with three people, each person drawing a name, the covered ticket and its keyboard reveal (no name in the page while covered), wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px with no horizontal overflow.
 - `tests/email.cjs`: confirmation, account settings, the draw-a-name email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It needs a server with `GIFTY_SMTP_HOST=log`.
 - `tests/admin.cjs`: the admin page (hidden until the admin address is confirmed, and from everyone else), removing an account, and deleting your own account with a wrong and a right password. It needs a server with `GIFTY_SMTP_HOST=log`, `GIFTY_ADMINS=boss@example.com` and a fresh data file.
+- `tests/features.cjs`: four people, keep apart, anonymous messages with focus handling, claiming and sorting ideas, the calendar file and reveal day, with axe on each state and a phone-width check. It needs a fresh data file and no mail; the exchange is dated today so the reveal is available.
 - `tests/gate.cjs`: the invite-only page in place of both signup and sign-in, refusal of direct API signups and logins, wrong and right codes, invited guests getting past the code, and security headers. It needs a server with an access code set.
 
 Automated accessibility checks are evidence, not a certification; no screen-reader testing has been done.
@@ -59,6 +61,9 @@ GIFTY_TEST_URL=http://127.0.0.1:8090 node tests/gate.cjs
 
 GIFTY_ADDR=127.0.0.1:8091 GIFTY_SMTP_HOST=log GIFTY_ADMINS=boss@example.com GIFTY_DATA=/tmp/gifty-browser/admin.json go run . > /tmp/gifty-browser/admin.log 2>&1 &
 GIFTY_TEST_URL=http://127.0.0.1:8091 GIFTY_MAIL_LOG=/tmp/gifty-browser/admin.log node tests/admin.cjs
+
+GIFTY_ADDR=127.0.0.1:8092 GIFTY_DATA=/tmp/gifty-browser/features.json go run . &
+GIFTY_TEST_URL=http://127.0.0.1:8092 node tests/features.cjs
 ```
 
-Each suite defaults to the port above (8088 to 8091); `GIFTY_TEST_URL` overrides it and `GIFTY_SCREENSHOTS` sets where screenshots go. Each suite signs up several accounts from one address, so restart its server between runs to reset the 30-attempt rate limit.
+Each suite defaults to the port above (8088 to 8092); `GIFTY_TEST_URL` overrides it and `GIFTY_SCREENSHOTS` sets where screenshots go. Each suite signs up several accounts from one address, so restart its server between runs to reset the 30-attempt rate limit.
