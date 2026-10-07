@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -323,6 +324,191 @@ func TestWishesScopedToExchanges(t *testing.T) {
 			}
 		}
 	}
+}
+
+// PNG magic bytes, enough for the photo type check.
+var testPNG = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0x0d, 'I', 'H', 'D', 'R'}
+
+func dataURI(mime string, b []byte) string {
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(b)
+}
+
+// get fetches a non-API path, like /image/, with the client's session.
+func (c *client) get(path string, status int) *httptest.ResponseRecorder {
+	c.t.Helper()
+	r := httptest.NewRequest("GET", path, nil)
+	if c.cookie != nil {
+		r.AddCookie(c.cookie)
+	}
+	w := httptest.NewRecorder()
+	c.a.handler().ServeHTTP(w, r)
+	if w.Code != status {
+		c.t.Fatalf("GET %s: got %d want %d: %s", path, w.Code, status, w.Body.String())
+	}
+	return w
+}
+
+func TestWishPhotos(t *testing.T) {
+	a := setup(t)
+	cs := map[string]*client{}
+	ids := map[string]string{}
+	for _, n := range []string{"ana", "ben", "cat", "dana"} {
+		cs[n] = &client{t: t, a: a}
+		ids[n] = cs[n].signup(n)
+	}
+	ana, ben, cat, dana := cs["ana"], cs["ben"], cs["cat"], cs["dana"]
+	// Two exchanges with fixed assignments: in the first cat buys for ana, in the second ben does.
+	mk := func(name string) string {
+		e := ana.req("POST", "exchanges", map[string]string{"Name": name, "Date": "2099-12-20", "Budget": "20", "Currency": "GBP"}, 200)
+		for _, n := range []string{"ben", "cat"} {
+			cs[n].req("POST", "join", map[string]string{"Code": e["invite"].(string)}, 200)
+		}
+		return e["id"].(string)
+	}
+	first, second := mk("First"), mk("Second")
+	a.state.Exchanges[first].Assignments = map[string]string{ids["ana"]: ids["ben"], ids["ben"]: ids["cat"], ids["cat"]: ids["ana"]}
+	a.state.Exchanges[second].Assignments = map[string]string{ids["ana"]: ids["cat"], ids["cat"]: ids["ben"], ids["ben"]: ids["ana"]}
+
+	// A photo is stored but never serialised: clients get a same-origin URL.
+	v := ana.req("POST", "wishes", map[string]any{"title": "Mug", "price": "about £8", "photos": []string{dataURI("image/png", testPNG)}}, 200)
+	wish := v["wishes"].([]any)[0].(map[string]any)
+	id := wish["id"].(string)
+	if wish["price"] != "about £8" {
+		t.Fatalf("price not saved: %v", wish)
+	}
+	if wish["images"].([]any)[0] != "/image/"+id+"/0" {
+		t.Fatalf("photo not exposed as a URL: %v", wish)
+	}
+	b, _ := json.Marshal(ana.req("GET", "me", nil, 200))
+	if strings.Contains(string(b), "base64") {
+		t.Fatal("photo data leaked into an API response")
+	}
+
+	// The owner can fetch it; a stranger and an anonymous caller cannot.
+	w := ana.get("/image/"+id+"/0", 200)
+	if ct := w.Header().Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("content type %q", ct)
+	}
+	if !bytes.Equal(w.Body.Bytes(), testPNG) {
+		t.Fatal("photo bytes changed on the way out")
+	}
+	dana.get("/image/"+id+"/0", 404)
+	(&client{t: t, a: a}).get("/image/"+id+"/0", 401)
+
+	// The people buying for ana can fetch it, each in the exchange that assigns them; nobody else can.
+	cat.get("/image/"+id+"/0", 200) // assigned to ana in the first exchange
+	ben.get("/image/"+id+"/0", 200) // assigned to ana in the second
+	// An idea scoped to one exchange is a photo only that exchange's giver can fetch.
+	v = ana.req("POST", "wishes", map[string]any{"title": "Scarf", "exchanges": []string{second}, "photos": []string{dataURI("image/png", testPNG)}}, 200)
+	scoped := v["wishes"].([]any)[1].(map[string]any)["id"].(string)
+	ben.get("/image/"+scoped+"/0", 200)
+	cat.get("/image/"+scoped+"/0", 404)
+	ana.get("/image/"+scoped+"/0", 200)
+	// The recipient view carries the URL, not the data.
+	r := ben.req("GET", "exchanges/"+second, nil, 200)["recipient"].(map[string]any)
+	for _, x := range r["wishes"].([]any) {
+		m := x.(map[string]any)
+		if m["title"] == "Scarf" && m["images"].([]any)[0] != "/image/"+scoped+"/0" {
+			t.Fatalf("recipient view photo: %v", m)
+		}
+	}
+
+	// Editing without touching the photo keeps it; removing it drops it; a new photo replaces it.
+	ana.req("POST", "wishes", map[string]any{"id": id, "title": "Mug, large"}, 200)
+	ana.get("/image/"+id+"/0", 200)
+	jpeg := append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, testPNG...)
+	ana.req("POST", "wishes", map[string]any{"id": id, "title": "Mug, large", "photos": []string{dataURI("image/jpeg", jpeg)}}, 200)
+	w = ana.get("/image/"+id+"/0", 200)
+	if ct := w.Header().Get("Content-Type"); ct != "image/jpeg" || !bytes.Equal(w.Body.Bytes(), jpeg) {
+		t.Fatalf("replaced photo: %q %v", ct, w.Body.Bytes())
+	}
+	ana.req("POST", "wishes", map[string]any{"id": id, "title": "Mug, large", "photos": []string{}}, 200)
+	ana.get("/image/"+id+"/0", 404)
+	if me := ana.req("GET", "me", nil, 200)["wishes"].([]any)[0].(map[string]any); me["images"] != nil {
+		t.Fatalf("removed photo still listed: %v", me)
+	}
+
+	// Only real image bytes of the declared type are accepted.
+	for _, image := range []string{
+		dataURI("text/html", []byte("<script>alert(1)</script>")),
+		dataURI("image/png", jpeg),            // declared PNG, actually JPEG
+		dataURI("image/png", []byte("hello")), // no image magic
+		"data:image/png;base64,not base64!",
+		"data:image/png;base64,",
+		"data:image/png," + string(testPNG), // not base64
+		"image/png;base64," + base64.StdEncoding.EncodeToString(testPNG), // not a data URI
+	} {
+		ana.req("POST", "wishes", map[string]any{"title": "Bad photo", "photos": []string{image}}, 400)
+	}
+	// Size limits: per photo and per person.
+	defer func() { maxImageBytes, maxImageTotal = 512*1024, 16*1024*1024 }()
+	maxImageBytes = 10
+	ana.req("POST", "wishes", map[string]any{"title": "Too big", "image": dataURI("image/png", testPNG)}, 400)
+	maxImageBytes = 512 * 1024
+	maxImageTotal = 10
+	ana.req("POST", "wishes", map[string]any{"title": "Over budget", "image": dataURI("image/png", testPNG)}, 400)
+	maxImageTotal = 16 * 1024 * 1024
+
+	// The idea form may carry a photo, so its body is allowed past the usual cap; past its own cap it is refused.
+	big := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, make([]byte, 500*1024)...)
+	ana.req("POST", "wishes", map[string]any{"title": "Big photo", "photos": []string{dataURI("image/png", big)}}, 200)
+	huge := "data:image/png;base64," + strings.Repeat("A", 4200*1024)
+	ana.req("POST", "wishes", map[string]any{"title": "Huge photo", "photos": []string{huge}}, 413)
+
+	// An idea holds several photos in order; entries already on the idea are kept by URL, new ones are
+	// data URIs, and the list can be reordered or trimmed in one save.
+	jpeg2 := append([]byte{0xFF, 0xD8, 0xFF, 0xE1}, testPNG...)
+	v = ana.req("POST", "wishes", map[string]any{"title": "Set", "photos": []string{dataURI("image/png", testPNG), dataURI("image/jpeg", jpeg)}}, 200)
+	var setID string
+	for _, x := range v["wishes"].([]any) {
+		if m := x.(map[string]any); m["title"] == "Set" {
+			setID = m["id"].(string)
+			if len(m["images"].([]any)) != 2 {
+				t.Fatalf("two photos expected: %v", m)
+			}
+		}
+	}
+	keep1, keep0 := "/image/"+setID+"/1", "/image/"+setID+"/0"
+	ana.req("POST", "wishes", map[string]any{"id": setID, "title": "Set", "photos": []string{keep1, keep0, dataURI("image/jpeg", jpeg2)}}, 200)
+	if w := ana.get("/image/"+setID+"/0", 200); !bytes.Equal(w.Body.Bytes(), jpeg) {
+		t.Fatal("photos not reordered")
+	}
+	if w := ana.get("/image/"+setID+"/2", 200); !bytes.Equal(w.Body.Bytes(), jpeg2) {
+		t.Fatal("new photo not appended")
+	}
+	ana.req("POST", "wishes", map[string]any{"id": setID, "title": "Set", "photos": []string{"/image/" + setID + "/2"}}, 200)
+	ana.get("/image/"+setID+"/1", 404)
+	if w := ana.get("/image/"+setID+"/0", 200); !bytes.Equal(w.Body.Bytes(), jpeg2) {
+		t.Fatal("photo not trimmed")
+	}
+	// Stale or foreign URLs, and too many photos, are refused.
+	ana.req("POST", "wishes", map[string]any{"id": setID, "title": "Set", "photos": []string{"/image/" + setID + "/5"}}, 400)
+	ana.req("POST", "wishes", map[string]any{"id": setID, "title": "Set", "photos": []string{"/image/" + id + "/0"}}, 400)
+	six := []string{}
+	for i := 0; i < maxImages+1; i++ {
+		six = append(six, dataURI("image/png", testPNG))
+	}
+	ana.req("POST", "wishes", map[string]any{"title": "Too many", "photos": six}, 400)
+	ana.get("/image/"+setID, 404)
+	ana.get("/image/"+setID+"/x", 404)
+
+	// The photos survive a restart with the data file.
+	reopened, err := openApp(a.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ana.a = reopened
+	ana.get("/image/"+scoped+"/0", 200)
+	bigID := ""
+	for _, x := range ana.req("GET", "me", nil, 200)["wishes"].([]any) {
+		if x.(map[string]any)["title"] == "Big photo" {
+			bigID = x.(map[string]any)["id"].(string)
+		}
+	}
+	if bigID == "" {
+		t.Fatal("big photo not saved")
+	}
+	ana.get("/image/"+bigID+"/0", 200)
 }
 func TestAccessGate(t *testing.T) {
 	a := setup(t)

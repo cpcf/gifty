@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,20 +63,121 @@ type Wish struct {
 	Title string `json:"title"`
 	URL   string `json:"url"`
 	Note  string `json:"note"`
+	Price string `json:"price"`
 	// Exchanges limits who sees the idea to the people buying for this user in those exchanges; empty means every exchange.
 	Exchanges []string `json:"exchanges"`
+	// Images are the idea's photos as data URIs, in display order. They live in the data file; clients
+	// are never sent them, only same-origin URLs to fetch the bytes from /image/.
+	Images []string `json:"images,omitempty"`
 }
 
+// wishOut is an idea as clients see it: photos are URLs, never the stored data.
+type wishOut struct {
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	URL       string   `json:"url"`
+	Note      string   `json:"note"`
+	Price     string   `json:"price"`
+	Exchanges []string `json:"exchanges"`
+	Images    []string `json:"images,omitempty"`
+}
+
+func publicWish(w Wish) wishOut {
+	out := wishOut{ID: w.ID, Title: w.Title, URL: w.URL, Note: w.Note, Price: w.Price, Exchanges: w.Exchanges}
+	for i := range w.Images {
+		out.Images = append(out.Images, imageURL(w.ID, i))
+	}
+	return out
+}
+
+func imageURL(wishID string, i int) string { return "/image/" + wishID + "/" + strconv.Itoa(i) }
+
 // wishesFor is what someone buying for u in exchange e can see.
-func wishesFor(u *User, e *Exchange) []Wish {
-	out := []Wish{}
+func wishesFor(u *User, e *Exchange) []wishOut {
+	out := []wishOut{}
 	for _, w := range u.Wishes {
 		if len(w.Exchanges) == 0 || slices.Contains(w.Exchanges, e.ID) {
 			w.Exchanges = nil
-			out = append(out, w)
+			out = append(out, publicWish(w))
 		}
 	}
 	return out
+}
+
+// Photo limits, far above what a phone photo needs after the app resizes it. They are variables so
+// tests can shrink them.
+var (
+	maxImageBytes = 512 * 1024       // decoded bytes per photo
+	maxImages     = 5                // photos per idea
+	maxImageTotal = 16 * 1024 * 1024 // decoded bytes of photos per person
+)
+
+// sniffImage returns the content type of image bytes by their magic numbers, or "".
+func sniffImage(b []byte) string {
+	switch {
+	case len(b) > 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF:
+		return "image/jpeg"
+	case len(b) > 8 && string(b[:8]) == "\x89PNG\r\n\x1a\n":
+		return "image/png"
+	case len(b) > 6 && (string(b[:6]) == "GIF87a" || string(b[:6]) == "GIF89a"):
+		return "image/gif"
+	case len(b) > 12 && string(b[:4]) == "RIFF" && string(b[8:12]) == "WEBP":
+		return "image/webp"
+	}
+	return ""
+}
+
+// decodeImage validates a photo data URI and returns its bytes and content type. Only real image
+// bytes of the declared type are accepted, so a photo can never smuggle markup or script.
+func decodeImage(s string) ([]byte, string, error) {
+	const prefix = "data:"
+	if !strings.HasPrefix(s, prefix) {
+		return nil, "", bad("Send the photo as image data.")
+	}
+	comma := strings.Index(s, ",")
+	if comma < 0 {
+		return nil, "", bad("That photo data is malformed.")
+	}
+	meta := strings.Split(s[len(prefix):comma], ";")
+	if len(meta) != 2 || meta[1] != "base64" {
+		return nil, "", bad("Send the photo as base64 image data.")
+	}
+	b, err := base64.StdEncoding.DecodeString(s[comma+1:])
+	if err != nil {
+		return nil, "", bad("That photo data is malformed.")
+	}
+	if len(b) == 0 || len(b) > maxImageBytes {
+		return nil, "", bad("A photo can be up to 512 KB. Try a smaller one.")
+	}
+	if sniffImage(b) != meta[0] {
+		return nil, "", bad("That file isn’t a JPEG, PNG, GIF or WebP photo.")
+	}
+	return b, meta[0], nil
+}
+
+// imageBytes is the decoded size of a stored photo data URI, without decoding it.
+func imageBytes(s string) int {
+	if comma := strings.Index(s, ","); comma >= 0 {
+		return base64.StdEncoding.DecodedLen(len(s) - comma - 1)
+	}
+	return 0
+}
+
+// imageBudget refuses photos that would push u past the per-person total. wishID's own stored
+// photos are not counted, because newBytes replaces them.
+func (a *App) imageBudget(u *User, wishID string, newBytes int) error {
+	total := newBytes
+	for _, w := range u.Wishes {
+		if w.ID != wishID {
+			for _, img := range w.Images {
+				total += imageBytes(img)
+			}
+		}
+	}
+	if total > maxImageTotal {
+		return bad("Your photos add up to more than 16 MB. Remove some from an older idea first.")
+	}
+	return nil
 }
 
 type Exchange struct {
@@ -304,6 +406,10 @@ func readJSON(r *http.Request, v any) error {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			return problem{413, "That form is too large."}
+		}
 		return bad("Check the form and try again.")
 	}
 	if d.Decode(&struct{}{}) != io.EOF {
@@ -331,7 +437,11 @@ func (a *App) cookie(w http.ResponseWriter, t string, age int) {
 	http.SetCookie(w, &http.Cookie{Name: "gifty_session", Value: t, Path: "/", HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode, MaxAge: age})
 }
 func (a *App) publicUser(u *User) any {
-	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": u.Wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]Reminder{}, u.Reminders...), "admin": a.isAdmin(u)}
+	wishes := make([]wishOut, len(u.Wishes))
+	for i, w := range u.Wishes {
+		wishes[i] = publicWish(w)
+	}
+	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]Reminder{}, u.Reminders...), "admin": a.isAdmin(u)}
 }
 
 // isAdmin needs a confirmed address, so nobody can become an administrator by signing up with an admin's email first.
@@ -477,7 +587,12 @@ func sameOrigin(r *http.Request) bool {
 }
 func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	r.Body = http.MaxBytesReader(w, r.Body, 32768)
+	// An idea can carry a photo, so its form gets a larger body than everything else.
+	limit := int64(32768)
+	if r.Method == "POST" && strings.TrimPrefix(r.URL.Path, "/api/") == "wishes" {
+		limit = 4 << 20
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if r.Method != "GET" && r.Method != "POST" {
 		send(w, 405, map[string]string{"error": "Method not allowed."})
 		return
@@ -526,6 +641,59 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	send(w, 200, result)
+}
+
+// serveImage sends an idea's photo to its owner, or to the person buying for them in an exchange the
+// idea is shown in — the same rule as the wish list itself. The bytes are never cached, so removing
+// or replacing a photo takes effect at once.
+func (a *App) serveImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" && r.Method != "HEAD" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	u := a.user(r)
+	if u == nil {
+		http.Error(w, "Sign in to continue.", 401)
+		return
+	}
+	id, num, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/image/"), "/")
+	n, err := strconv.Atoi(num)
+	if err != nil || n < 0 {
+		http.NotFound(w, r)
+		return
+	}
+	for _, owner := range a.state.Users {
+		for _, wish := range owner.Wishes {
+			if wish.ID != id || n >= len(wish.Images) {
+				continue
+			}
+			if owner.ID != u.ID {
+				allowed := false
+				for _, e := range a.state.Exchanges {
+					if e.Assignments[u.ID] == owner.ID && (len(wish.Exchanges) == 0 || slices.Contains(wish.Exchanges, e.ID)) {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					http.NotFound(w, r)
+					return
+				}
+			}
+			data, mime, err := decodeImage(wish.Images[n])
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", mime)
+			w.Header().Set("Cache-Control", "private, no-store")
+			http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+			return
+		}
+	}
+	http.NotFound(w, r)
 }
 
 // prepare rate limits an authentication request and, for those carrying a
@@ -913,14 +1081,26 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		return out, nil
 	}
 	if path == "wishes" && r.Method == "POST" {
-		var in Wish
+		var in struct {
+			ID        string   `json:"id"`
+			Title     string   `json:"title"`
+			URL       string   `json:"url"`
+			Note      string   `json:"note"`
+			Price     string   `json:"price"`
+			Exchanges []string `json:"exchanges"`
+			// Photos, when present, is the idea's whole photo list in order: each entry is either a
+			// photo already on the idea (its /image/ URL) or a new one as a data URI. Absent means
+			// leave the photos alone.
+			Photos *[]string `json:"photos"`
+		}
 		if err := readJSON(r, &in); err != nil {
 			return nil, err
 		}
 		in.Title = strings.TrimSpace(in.Title)
 		in.URL = strings.TrimSpace(in.URL)
-		if in.Title == "" || len(in.Title) > 120 || len(in.Note) > 1000 || len(in.URL) > 2000 {
-			return nil, bad("Add a title up to 120 characters and a note up to 1,000 characters.")
+		in.Price = strings.TrimSpace(in.Price)
+		if in.Title == "" || len(in.Title) > 120 || len(in.Note) > 1000 || len(in.URL) > 2000 || len(in.Price) > 60 {
+			return nil, bad("Add a title up to 120 characters, a note up to 1,000 characters and a price up to 60 characters.")
 		}
 		if in.URL != "" {
 			p, err := url.Parse(in.URL)
@@ -937,19 +1117,52 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				scope = append(scope, id)
 			}
 		}
-		in.Exchanges = scope
+		index := -1
+		var w Wish
 		if in.ID == "" {
 			if len(u.Wishes) >= 100 {
 				return nil, bad("Your list can hold up to 100 ideas.")
 			}
-			in.ID = token()
-			u.Wishes = append(u.Wishes, in)
+			w.ID = token()
 		} else {
-			index := slices.IndexFunc(u.Wishes, func(v Wish) bool { return v.ID == in.ID })
+			index = slices.IndexFunc(u.Wishes, func(v Wish) bool { return v.ID == in.ID })
 			if index < 0 {
 				return nil, problem{404, "Gift idea not found."}
 			}
-			u.Wishes[index] = in
+			w = u.Wishes[index] // keeps the stored photos unless in.Photos replaces them
+		}
+		w.Title, w.URL, w.Note, w.Price, w.Exchanges = in.Title, in.URL, in.Note, in.Price, scope
+		if in.Photos != nil {
+			if len(*in.Photos) > maxImages {
+				return nil, bad(fmt.Sprintf("An idea can have up to %d photos.", maxImages))
+			}
+			images, size := []string{}, 0
+			for _, p := range *in.Photos {
+				if num, ok := strings.CutPrefix(p, "/image/"+w.ID+"/"); ok {
+					n, err := strconv.Atoi(num)
+					if err != nil || n < 0 || n >= len(w.Images) {
+						return nil, bad("That photo is no longer on this idea.")
+					}
+					images = append(images, w.Images[n])
+					size += imageBytes(w.Images[n])
+					continue
+				}
+				data, _, err := decodeImage(p)
+				if err != nil {
+					return nil, err
+				}
+				size += len(data)
+				images = append(images, p)
+			}
+			if err := a.imageBudget(u, w.ID, size); err != nil {
+				return nil, err
+			}
+			w.Images = images
+		}
+		if index < 0 {
+			u.Wishes = append(u.Wishes, w)
+		} else {
+			u.Wishes[index] = w
 		}
 		return a.publicUser(u), nil
 	}
@@ -1272,6 +1485,7 @@ func draw(ids []string) map[string]string {
 func (a *App) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/", a.serveAPI)
+	mux.HandleFunc("/image/", a.serveImage)
 	// Embedded files have no modification time, so content hashes let browsers revalidate instead of re-downloading.
 	type file struct {
 		body []byte
@@ -1309,7 +1523,7 @@ func (a *App) handler() http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 		mux.ServeHTTP(w, r)
 	})
 }
