@@ -259,6 +259,9 @@ type App struct {
 	// hourStart and hourCount cap account emails across the whole site.
 	hourStart time.Time
 	hourCount int
+	// watch counts security events for the emails sent to alertTo (see security.go).
+	watch   watch
+	alertTo string
 }
 
 // prehash carries a password hash computed before the request takes the state lock.
@@ -600,6 +603,7 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 	// Browsers always say where a POST came from. Mail providers' one-click unsubscribe is the one
 	// legitimate cross-site POST, and its token is its credential.
 	if r.Method == "POST" && !strings.HasPrefix(r.URL.Path, "/api/unsubscribe/") && !sameOrigin(r) {
+		a.sec(r, "origin_refused")
 		send(w, 403, map[string]string{"error": "Open Gifty and try again."})
 		return
 	}
@@ -612,6 +616,7 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if r.Method == "POST" && !isAuthPath(strings.TrimPrefix(r.URL.Path, "/api/")) && !a.allow("write|"+a.clientIP(r), 300) {
+		a.sec(r, "write_rate_limited")
 		send(w, 429, map[string]string{"error": "Too many changes at once. Try again in a few minutes."})
 		return
 	}
@@ -741,10 +746,12 @@ func (a *App) prepare(w http.ResponseWriter, r *http.Request, path string) (*htt
 	}
 	a.mu.Unlock()
 	if !allowed {
+		a.sec(r, "auth_rate_limited")
 		send(w, 429, map[string]string{"error": "Too many attempts. Try again in 15 minutes."})
 		return r, false
 	}
 	if locked {
+		a.sec(r, "account_locked")
 		send(w, 429, map[string]string{"error": "Too many attempts on this account. Try again in 15 minutes, or reset the password."})
 		return r, false
 	}
@@ -838,9 +845,11 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		// the right code is refused until the window ends, so the answer never confirms a guess.
 		now := time.Now()
 		if a.gateFails.Count >= 20 && now.Before(a.gateFails.Reset) {
+			a.sec(r, "access_code_exhausted")
 			return nil, problem{429, "Too many wrong codes. Try again in 15 minutes."}
 		}
 		if a.access == "" || !same(a.gate(strings.TrimSpace(in.Code)), a.access) {
+			a.sec(r, "access_code_wrong")
 			a.gateFails.take(now, 20)
 			return nil, problem{403, "That code isn’t right."}
 		}
@@ -857,6 +866,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return v.VerifyHash != "" && same(v.VerifyHash, h) && time.Now().Before(v.VerifyExpires)
 		})
 		if v == nil {
+			a.sec(r, "token_refused")
 			return nil, problem{404, "This confirmation link has expired or already been used."}
 		}
 		v.Verified, v.VerifyHash, v.VerifyExpires = true, "", time.Time{}
@@ -869,6 +879,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return same(a.unsubToken(v), t)
 		})
 		if v == nil {
+			a.sec(r, "token_refused")
 			return nil, problem{404, "This link doesn’t match an account."}
 		}
 		v.NoEmail = true
@@ -904,6 +915,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			h := digest(in.Token)
 			v := a.byToken(func(v *User) bool { return v.ResetHash != "" && same(v.ResetHash, h) && now.Before(v.ResetExpires) })
 			if v == nil {
+				a.sec(r, "token_refused")
 				return nil, problem{404, "This reset link has expired or already been used. Ask for a new one."}
 			}
 			if pre.hash == "" {
@@ -947,6 +959,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				return nil, bad("Use a password between 12 and 256 characters.")
 			}
 			if !a.hasAccess(r) && !a.openInvite(in.Invite) {
+				a.sec(r, "access_denied")
 				return nil, problem{403, "Enter the access code or open your invitation link first."}
 			}
 			if found != nil {
@@ -968,6 +981,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			a.grantAccess(w) // an invited guest never sees the code, and still needs to sign in again later
 		} else {
 			if !a.hasAccess(r) {
+				a.sec(r, "access_denied")
 				return nil, problem{403, "Enter the access code first."}
 			}
 			if len(in.Password) > 256 {
@@ -979,6 +993,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 				want = found.Hash
 			}
 			if !same(pre.hash, want) {
+				a.sec(r, "login_failed")
 				return nil, problem{401, "Email or password is incorrect."}
 			}
 			delete(a.fails, found.ID)
@@ -1051,6 +1066,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 	if path == "account/delete" && r.Method == "POST" {
 		pre, _ := r.Context().Value(prehashKey{}).(prehash)
 		if u.Salt != pre.salt || subtle.ConstantTimeCompare([]byte(pre.hash), []byte(u.Hash)) != 1 {
+			a.sec(r, "login_failed")
 			return nil, problem{403, "That password isn’t right."}
 		}
 		if err := a.removeUser(u); err != nil {
@@ -1585,6 +1601,13 @@ func main() {
 		}
 		a.wake = make(chan struct{}, 1)
 		go a.mailLoop()
+		if to := strings.TrimSpace(os.Getenv("GIFTY_ALERT_EMAIL")); to != "" {
+			if addr, err := mail.ParseAddress(to); err != nil || addr.Address != to {
+				log.Fatal("GIFTY_ALERT_EMAIL must be a plain email address")
+			}
+			a.alertTo = to
+			go a.alertLoop()
+		}
 		fmt.Printf("Email is on, sending from %s\n", a.from)
 	}
 	s := &http.Server{Addr: addr, Handler: a.handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}

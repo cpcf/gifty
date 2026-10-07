@@ -48,6 +48,7 @@ Not included: exclusion rules, gift reservations and invitations by email (links
 | `GIFTY_SMTP_PORT` | `587` | SMTP port; the server must offer STARTTLS |
 | `GIFTY_SMTP_USER`, `GIFTY_SMTP_PASSWORD` | unset | SMTP credentials |
 | `GIFTY_MAIL_FROM` | unset | Sender, e.g. `Gifty <noreply@gifty.example.com>` |
+| `GIFTY_ALERT_EMAIL` | unset | Address that gets a warning when failed sign-ins and similar events spike, and a daily summary. Needs email on |
 
 ## Hosting
 

@@ -9,7 +9,8 @@ This is one way to run Gifty for yourself: a single small Linux server (the scri
 | `setup.sh` | Adds swap, installs Caddy and creates the `gifty` user and directories. Safe to rerun |
 | `deploy.sh user@host` | Runs the tests, builds a Linux binary, installs it with the service, backup timer and Caddy config, and restarts Gifty. Data is not touched |
 | `set-access-code.sh user@host` | Prompts for a new `GIFTY_ACCESS_CODE` (empty removes it, `generate` makes a random one), updates `/etc/gifty/env` and restarts Gifty |
-| `Caddyfile` | Serves `GIFTY_DOMAIN`, gets a certificate and proxies to Gifty on 127.0.0.1:8080 |
+| `Caddyfile` | Serves `GIFTY_DOMAIN`, gets a certificate and proxies to Gifty on 127.0.0.1:8080. Writes an access log to `/var/log/caddy`, with invitation codes and unsubscribe links blanked |
+| `fail2ban/` | Filters and jails that ban addresses causing repeated `security:` events in the Gifty journal or 400/404/405 responses in the access log. `deploy.sh` installs them. Add your own address to `ignoreip` first |
 | `gifty.service` | Runs Gifty as the `gifty` user with `/etc/gifty/env` for configuration, trusting Caddy for client addresses (`GIFTY_TRUST_PROXY`) |
 | `gifty-backup.*` | Daily copy of the data file to `/var/lib/gifty/backups`, kept 14 days. It does not copy `gifty.key` |
 | `env.example` | Every setting the server reads; copy to `/etc/gifty/env` (root:gifty, mode 640) and never commit the real file |
@@ -31,3 +32,15 @@ Any other SMTP provider that offers STARTTLS works with the same settings.
 ## Administrators
 
 List administrator email addresses in `GIFTY_ADMINS`. An administrator must have a confirmed email address, so email must be on. They get an Admin page to remove accounts and exchanges. It never shows who is buying for whom.
+
+## Monitoring
+
+Set `GIFTY_ALERT_EMAIL` in `/etc/gifty/env` (email must be on) to get a warning when failed sign-ins and similar events spike, and a daily summary. `deploy.sh` also installs fail2ban with the jails in `deploy/fail2ban/`. Edit `ignoreip` in `fail2ban/jail.d/gifty.conf` before deploying so that you can't ban yourself. Afterwards:
+
+```sh
+sudo fail2ban-client status gifty        # who is banned for app events
+sudo fail2ban-client status gifty-web    # who is banned for probing
+sudo fail2ban-client set gifty unbanip 203.0.113.9
+```
+
+Banning works on the address Caddy sees, so it needs the firewall on the host (nftables), not only the Lightsail firewall. [docs/security.md](../docs/security.md#monitoring) lists what is logged.

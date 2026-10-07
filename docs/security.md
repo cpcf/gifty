@@ -23,6 +23,13 @@ Gifty is built for a small, trusted audience, but it is meant to be safe on the 
 - **Size:** 20 active exchanges per organiser, 100 people per exchange, 100 ideas per person, five photos per idea of up to 512 KB each and 16 MB of photos per person, and site-wide ceilings of 2,000 accounts and 5,000 exchanges.
 - The per-client limiter tracks at most 10,000 keys in memory and forgets everything on restart.
 
+## Monitoring
+
+- **Log:** failed sign-ins, wrong or missing access codes, locked accounts, rate limits, refused confirmation, reset and unsubscribe links, and refused cross-site posts are each logged as `security: <event> ip=<address>`. Passwords, emails and codes are never logged. `journalctl -u gifty | grep security:` shows them.
+- **Email:** with `GIFTY_ALERT_EMAIL` set, 40 events in ten minutes send a warning (at most one an hour), and a summary of the day's events and busiest addresses goes out when the UTC date turns over, if anything happened. The counts are in memory, so a restart starts them afresh.
+- **Banning:** `deploy/fail2ban/` bans an address at the firewall after 10 such events in ten minutes, and after 20 400, 404 or 405 responses in five minutes in Caddy's access log (`/var/log/caddy/access.log`, with invitation codes and unsubscribe links blanked). Bans start at an hour and grow for repeat offenders up to a week. Add the addresses you administer from to `ignoreip` in `deploy/fail2ban/jail.d/gifty.conf`, and see who is banned with `sudo fail2ban-client status gifty`.
+- Banning by address does little against an attacker with many addresses; the per-account and access-code limits above are what stop that.
+
 ## Known limits
 
 - Anyone who can create an account can try to lock its owner out of sign-in for 15 minutes by failing ten times; resetting the password clears it.

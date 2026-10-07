@@ -17,7 +17,8 @@ apt-get -o DPkg::Lock::Timeout=600 update
 while pgrep -x unattended-upgr >/dev/null || pgrep -x dpkg >/dev/null; do sleep 5; done
 dpkg --configure -a
 apt-get -o DPkg::Lock::Timeout=600 -y upgrade
-apt-get -o DPkg::Lock::Timeout=600 install -y caddy unattended-upgrades
+apt-get -o DPkg::Lock::Timeout=600 install -y caddy unattended-upgrades fail2ban nftables
+install -d -o caddy -g caddy -m 755 /var/log/caddy
 id gifty >/dev/null 2>&1 || useradd --system --home-dir /var/lib/gifty --shell /usr/sbin/nologin gifty
 install -d -o gifty -g gifty -m 700 /var/lib/gifty /var/lib/gifty/backups
 install -d -m 755 /opt/gifty

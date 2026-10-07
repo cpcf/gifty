@@ -20,6 +20,7 @@ Statement coverage is about 81% (`go test -cover ./...`). The tests cover:
 - password hashing outside the state lock
 - abuse limits: per-client and per-account attempts, the shared budget for wrong access codes, write and token limits, email caps and the limiter's bounds
 - origin checks on writes
+- security events being logged without credentials, and burst alerts and daily summaries being emailed
 - the server key file
 
 ## Browser
