@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"slices"
@@ -401,5 +402,40 @@ func TestAccountReminderDefault(t *testing.T) {
 	}
 	if got := sent(19); len(got) != 2 || !got["ana"] || !got["ben"] {
 		t.Fatalf("1 day out: %v", got)
+	}
+}
+
+// One caller can't spend the site's account-email allowance, however many accounts they hold, so resets keep
+// working for everyone else.
+func TestAccountEmailsAreLimitedPerCaller(t *testing.T) {
+	a, _ := mailSetup(t)
+	from := func(ip string) *http.Request {
+		r := httptest.NewRequest("POST", "/api/reset/request", nil)
+		r.RemoteAddr = ip + ":1234"
+		return r
+	}
+	sent := 0
+	for i := 0; i < 20; i++ {
+		u := &User{ID: fmt.Sprint("u", i), Email: fmt.Sprintf("u%d@example.com", i)}
+		for j := 0; j < 5; j++ {
+			if a.accountMailAllowed(u, from("203.0.113.1"), time.Now()) {
+				sent++
+			}
+		}
+	}
+	if sent != maxAccountMailPerIP {
+		t.Fatalf("one caller sent %d account emails, want %d", sent, maxAccountMailPerIP)
+	}
+	if !a.accountMailAllowed(&User{ID: "v", Email: "v@example.com"}, from("198.51.100.2"), time.Now()) {
+		t.Fatal("another caller's reset was refused")
+	}
+	// The site-wide ceiling still holds, and reaching it is a security event.
+	a.hourCount = maxAccountMailPerHour
+	before := a.watch.events["mail_site_limit"]
+	if a.accountMailAllowed(&User{ID: "w", Email: "w@example.com"}, from("198.51.100.3"), time.Now()) {
+		t.Fatal("site-wide ceiling ignored")
+	}
+	if a.watch.events["mail_site_limit"] != before+1 {
+		t.Fatal("reaching the ceiling wasn't reported")
 	}
 }

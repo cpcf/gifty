@@ -442,13 +442,13 @@ func TestWishPhotos(t *testing.T) {
 		ana.req("POST", "wishes", map[string]any{"title": "Bad photo", "photos": []string{image}}, 400)
 	}
 	// Size limits: per photo and per person.
-	defer func() { maxImageBytes, maxImageTotal = 512*1024, 16*1024*1024 }()
+	defer func() { maxImageBytes, maxImageTotal = 512*1024, 8*1024*1024 }()
 	maxImageBytes = 10
-	ana.req("POST", "wishes", map[string]any{"title": "Too big", "image": dataURI("image/png", testPNG)}, 400)
+	ana.req("POST", "wishes", map[string]any{"title": "Too big", "photos": []string{dataURI("image/png", testPNG)}}, 400)
 	maxImageBytes = 512 * 1024
 	maxImageTotal = 10
-	ana.req("POST", "wishes", map[string]any{"title": "Over budget", "image": dataURI("image/png", testPNG)}, 400)
-	maxImageTotal = 16 * 1024 * 1024
+	ana.req("POST", "wishes", map[string]any{"title": "Over budget", "photos": []string{dataURI("image/png", testPNG)}}, 400)
+	maxImageTotal = 8 * 1024 * 1024
 
 	// The idea form may carry a photo, so its body is allowed past the usual cap; past its own cap it is refused.
 	big := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, make([]byte, 500*1024)...)

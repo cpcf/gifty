@@ -78,8 +78,10 @@ type Wish struct {
 	// whatever Exchanges says, so an idea can be for friends only.
 	Friends     bool `json:"friends,omitempty"`
 	NoExchanges bool `json:"noExchanges,omitempty"`
-	// Images are the idea's photos as data URIs, in display order. They live in the data file; clients
+	// Photos are the idea's photos in display order, stored as files beside the data file (see photos.go). Clients
 	// are never sent them, only same-origin URLs to fetch the bytes from /image/.
+	Photos []Photo `json:"photos,omitempty"`
+	// Images held photos as data URIs in data files from before the photos directory. openApp moves them to Photos.
 	Images []string `json:"images,omitempty"`
 	// Status is set by the owner when the idea no longer needs a gift: "got" (they have it) or "dropped" (they
 	// don't want it any more). Sorted ideas are hidden from the people buying for them.
@@ -118,7 +120,7 @@ type wishOut struct {
 
 func publicWish(w Wish) wishOut {
 	out := wishOut{ID: w.ID, Title: w.Title, URL: w.URL, Note: w.Note, Price: w.Price, Exchanges: w.Exchanges, Friends: w.Friends, NoExchanges: w.NoExchanges, Status: w.Status}
-	for i := range w.Images {
+	for i := range w.Photos {
 		out.Images = append(out.Images, imageURL(w.ID, i))
 	}
 	return out
@@ -151,12 +153,12 @@ func wishesFor(u *User, e *Exchange, giver string) []wishOut {
 	return out
 }
 
-// Photo limits, far above what a phone photo needs after the app resizes it. They are variables so
-// tests can shrink them.
+// Photo limits, far above what a phone photo needs after the app resizes it (to about 150 KB). They are
+// variables so tests can shrink them. maxPhotoTotal, in photos.go, bounds the whole site.
 var (
-	maxImageBytes = 512 * 1024       // decoded bytes per photo
-	maxImages     = 5                // photos per idea
-	maxImageTotal = 16 * 1024 * 1024 // decoded bytes of photos per person
+	maxImageBytes = 512 * 1024      // decoded bytes per photo
+	maxImages     = 5               // photos per idea
+	maxImageTotal = 8 * 1024 * 1024 // decoded bytes of photos per person
 )
 
 // sniffImage returns the content type of image bytes by their magic numbers, or "".
@@ -202,27 +204,24 @@ func decodeImage(s string) ([]byte, string, error) {
 	return b, meta[0], nil
 }
 
-// imageBytes is the decoded size of a stored photo data URI, without decoding it.
-func imageBytes(s string) int {
-	if comma := strings.Index(s, ","); comma >= 0 {
-		return base64.StdEncoding.DecodedLen(len(s) - comma - 1)
-	}
-	return 0
-}
-
-// imageBudget refuses photos that would push u past the per-person total. wishID's own stored
-// photos are not counted, because newBytes replaces them.
-func (a *App) imageBudget(u *User, wishID string, newBytes int) error {
-	total := newBytes
+// imageBudget refuses photos that would push u past the per-person total, or the site past its own. wishBytes
+// is the size of all of wishID's photos after the change, which replace its stored ones; uploaded is the size
+// of the photos being added.
+func (a *App) imageBudget(u *User, wishID string, wishBytes, uploaded int) error {
+	total := wishBytes
 	for _, w := range u.Wishes {
 		if w.ID != wishID {
-			for _, img := range w.Images {
-				total += imageBytes(img)
+			for _, p := range w.Photos {
+				total += p.Size
 			}
 		}
 	}
 	if total > maxImageTotal {
-		return bad("Your photos add up to more than 16 MB. Remove some from an older idea first.")
+		return bad(fmt.Sprintf("Your photos add up to more than %d MB. Remove some from an older idea first.", maxImageTotal>>20))
+	}
+	if uploaded > 0 && a.photoBytes+uploaded > maxPhotoTotal {
+		log.Print("photo refused: the site's photo storage is full")
+		return problem{507, "Gifty has run out of room for photos. Save the idea without one for now."}
 	}
 	return nil
 }
@@ -329,6 +328,15 @@ type App struct {
 	// watch counts security events for the emails sent to alertTo (see security.go).
 	watch   watch
 	alertTo string
+	// photoBytes is the size of every stored photo, for maxPhotoTotal. memPhotos stands in for the photos
+	// directory when there is no data file.
+	photoBytes int
+	memPhotos  map[string][]byte
+	// dropped is set by a request that may have left photo files unused, so they are swept after its save.
+	dropped bool
+	// wishOwner maps each idea to the account it is on, so /image/ finds a photo without scanning every list.
+	// Ideas never move between accounts; an entry for a deleted idea just fails the check in serveImage.
+	wishOwner map[string]string
 }
 
 // prehash carries a password hash computed before the request takes the state lock.
@@ -395,6 +403,22 @@ func openApp(path string) (*App, error) {
 	}
 	if err := a.loadKey(); err != nil {
 		return nil, err
+	}
+	moved, err := a.migratePhotos()
+	if err != nil {
+		return nil, err
+	}
+	if moved {
+		if err := a.save(); err != nil {
+			return nil, err
+		}
+	}
+	a.sweepPhotos()
+	a.wishOwner = map[string]string{}
+	for _, u := range a.state.Users {
+		for _, w := range u.Wishes {
+			a.wishOwner[w.ID] = u.ID
+		}
 	}
 	return a, nil
 }
@@ -487,6 +511,30 @@ func readJSON(r *http.Request, v any) error {
 	}
 	return nil
 }
+
+// buffered holds a response in memory, so it can be built under the state lock and sent once the lock is free.
+// Headers go straight to the real response's header map, which nothing sends before flush.
+type buffered struct {
+	header http.Header
+	code   int
+	body   bytes.Buffer
+}
+
+func (b *buffered) Header() http.Header { return b.header }
+func (b *buffered) WriteHeader(code int) {
+	if b.code == 0 {
+		b.code = code
+	}
+}
+func (b *buffered) Write(p []byte) (int, error) {
+	b.WriteHeader(200)
+	return b.body.Write(p)
+}
+func (b *buffered) flush(w http.ResponseWriter) {
+	w.WriteHeader(max(b.code, 200))
+	w.Write(b.body.Bytes())
+}
+
 func send(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -529,6 +577,7 @@ const deletedName = "Deleted account"
 // removeUser deletes an account. People in drawn exchanges stay on as an empty
 // "Deleted account" so everyone else's draw still adds up; otherwise the record goes.
 func (a *App) removeUser(u *User) error {
+	a.dropped = true
 	a.forgetUser(u.ID)
 	for _, e := range a.state.Exchanges {
 		if e.Owner == u.ID && !e.Archived && len(e.Members) > 1 {
@@ -573,6 +622,7 @@ func (a *App) removeUser(u *User) error {
 
 // removeExchange deletes an exchange and clears it from the scope of ideas that named it.
 func (a *App) removeExchange(id string) {
+	a.dropped = true
 	delete(a.state.Exchanges, id)
 	for _, v := range a.state.Users {
 		// An idea meant only for this exchange goes with it: with no exchange left in its scope it would
@@ -689,17 +739,46 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if r.Method == "POST" && !isAuthPath(strings.TrimPrefix(r.URL.Path, "/api/")) && !a.allow("write|"+a.clientIP(r), 300) {
+	// The response is built under the state lock but sent after it is released, so a client that reads slowly
+	// holds up nobody else.
+	out := &buffered{header: w.Header()}
+	func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		a.serveLocked(out, r)
+	}()
+	out.flush(w)
+}
+
+// Reads are rate limited too, so nobody can keep the lock busy with them. Looking up an invitation or a friend
+// link scans every exchange or account, so those get a tighter budget of their own.
+const (
+	maxReads   = 2000
+	maxLookups = 60
+)
+
+func isLookup(path string) bool {
+	return strings.HasPrefix(path, "invite/") || strings.HasPrefix(path, "friend-link/") || strings.HasPrefix(path, "friend/")
+}
+
+// serveLocked is the part of serveAPI that runs under the state lock.
+func (a *App) serveLocked(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/")
+	if r.Method == "POST" && !isAuthPath(path) && !a.allow("write|"+a.clientIP(r), 300) {
 		a.sec(r, "write_rate_limited")
 		send(w, 429, map[string]string{"error": "Too many changes at once. Try again in a few minutes."})
+		return
+	}
+	if r.Method == "GET" && (!a.allow("read|"+a.clientIP(r), maxReads) || isLookup(path) && !a.allow("lookup|"+a.clientIP(r), maxLookups)) {
+		a.sec(r, "read_rate_limited")
+		send(w, 429, map[string]string{"error": "Too many requests. Try again in a few minutes."})
 		return
 	}
 	// Roll back all in-memory changes when persistence fails. Reads change nothing, so only writes pay for a snapshot.
 	var before []byte
 	if r.Method == "POST" {
 		before, _ = json.Marshal(a.state)
+		a.dropped = false
 	}
 	result, err := a.dispatch(w, r)
 	if err == nil && r.Method == "POST" {
@@ -709,6 +788,8 @@ func (a *App) serveAPI(w http.ResponseWriter, r *http.Request) {
 			if json.Unmarshal(before, &restored) == nil {
 				a.state = restored
 			}
+		} else if a.dropped {
+			a.sweepPhotos()
 		}
 	}
 	if err != nil {
@@ -735,49 +816,65 @@ func (a *App) serveImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	u := a.user(r)
-	if u == nil {
+	// Only the lookup and the permission check hold the lock; the file is read and sent without it.
+	photo, status := a.findPhoto(r)
+	switch status {
+	case 401:
 		http.Error(w, "Sign in to continue.", 401)
 		return
-	}
-	id, num, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/image/"), "/")
-	n, err := strconv.Atoi(num)
-	if err != nil || n < 0 {
+	case 429:
+		http.Error(w, "Too many requests. Try again in a few minutes.", 429)
+		return
+	case 404:
 		http.NotFound(w, r)
 		return
 	}
-	for _, owner := range a.state.Users {
-		for _, wish := range owner.Wishes {
-			if wish.ID != id || n >= len(wish.Images) {
-				continue
+	data, err := a.readPhoto(photo)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", photo.Type)
+	w.Header().Set("Cache-Control", "private, no-store")
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+}
+
+// findPhoto returns the photo /image/<idea>/<n> names, if the caller may see it, or the status to answer with.
+func (a *App) findPhoto(r *http.Request) (Photo, int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.allow("read|"+a.clientIP(r), maxReads) {
+		a.sec(r, "read_rate_limited")
+		return Photo{}, 429
+	}
+	u := a.user(r)
+	if u == nil {
+		return Photo{}, 401
+	}
+	id, num, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/image/"), "/")
+	n, err := strconv.Atoi(num)
+	owner := a.state.Users[a.wishOwner[id]]
+	if err != nil || n < 0 || owner == nil {
+		return Photo{}, 404
+	}
+	i := slices.IndexFunc(owner.Wishes, func(w Wish) bool { return w.ID == id })
+	if i < 0 || n >= len(owner.Wishes[i].Photos) {
+		return Photo{}, 404
+	}
+	wish := owner.Wishes[i]
+	if owner.ID != u.ID {
+		allowed := wish.Friends && slices.Contains(owner.Friends, u.ID) && (wish.Status == "" || wish.ClaimedBy == u.ID)
+		for _, e := range a.state.Exchanges {
+			if e.Assignments[u.ID] == owner.ID && wish.forExchange(e.ID) && (wish.Status == "" || wish.ClaimedBy == u.ID) {
+				allowed = true
+				break
 			}
-			if owner.ID != u.ID {
-				allowed := wish.Friends && slices.Contains(owner.Friends, u.ID) && (wish.Status == "" || wish.ClaimedBy == u.ID)
-				for _, e := range a.state.Exchanges {
-					if e.Assignments[u.ID] == owner.ID && wish.forExchange(e.ID) && (wish.Status == "" || wish.ClaimedBy == u.ID) {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
-					http.NotFound(w, r)
-					return
-				}
-			}
-			data, mime, err := decodeImage(wish.Images[n])
-			if err != nil {
-				http.NotFound(w, r)
-				return
-			}
-			w.Header().Set("Content-Type", mime)
-			w.Header().Set("Cache-Control", "private, no-store")
-			http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
-			return
+		}
+		if !allowed {
+			return Photo{}, 404
 		}
 	}
-	http.NotFound(w, r)
+	return wish.Photos[n], 200
 }
 
 // prepare rate limits an authentication request and, for those carrying a
@@ -979,7 +1076,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			email := strings.ToLower(strings.TrimSpace(in.Email))
 			// Always answer the same way so the form can't reveal which addresses have accounts.
 			if v := a.byToken(func(v *User) bool { return v.Email != "" && v.Email == email }); v != nil && a.mailOn() && now.After(v.ResetExpires.Add(2*time.Minute-time.Hour)) {
-				a.sendReset(v)
+				a.sendReset(v, r)
 			}
 			return map[string]bool{"ok": true}, nil
 		}
@@ -1043,7 +1140,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			}
 			if found != nil {
 				// Tell the owner, so a probe for their address doesn't go unnoticed.
-				if found.Verified && a.accountMailAllowed(found, now) {
+				if found.Verified && a.accountMailAllowed(found, r, now) {
 					a.queue(found, false, "Someone tried to sign up with your Gifty email", fmt.Sprintf("Hello %s,\n\nSomeone tried to create a Gifty account with this email address, which already has one. If that was you, sign in at %s/#login instead (you can reset your password from there). If it wasn’t, you can ignore this email.", found.Name, a.base))
 				}
 				return nil, bad("An account already uses that email. Sign in instead.")
@@ -1056,7 +1153,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			}
 			found = &User{ID: token(), Name: in.Name, Email: in.Email, Salt: pre.salt, Hash: pre.hash, Wishes: []Wish{}, FriendCode: token()}
 			a.state.Users[found.ID] = found
-			a.sendVerify(found)
+			a.sendVerify(found, r)
 			a.grantAccess(w) // an invited guest never sees the code, and still needs to sign in again later
 		} else {
 			if !a.hasAccess(r) {
@@ -1112,7 +1209,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 		if time.Now().Before(u.LastMail.Add(time.Minute)) {
 			return nil, problem{429, "Wait a minute before asking for another email."}
 		}
-		if !a.sendVerify(u) {
+		if !a.sendVerify(u, r) {
 			return nil, problem{429, "You’ve asked for several emails today. Try again tomorrow."}
 		}
 		return a.publicUser(u), nil
@@ -1250,31 +1347,52 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			if len(*in.Photos) > maxImages {
 				return nil, bad(fmt.Sprintf("An idea can have up to %d photos.", maxImages))
 			}
-			images, size := []string{}, 0
+			// Each entry is a photo already on the idea, or new bytes to store once everything has been checked.
+			type entry struct {
+				kept Photo
+				data []byte
+				mime string
+			}
+			entries, size, uploaded := []entry{}, 0, 0
 			for _, p := range *in.Photos {
 				if num, ok := strings.CutPrefix(p, "/image/"+w.ID+"/"); ok {
 					n, err := strconv.Atoi(num)
-					if err != nil || n < 0 || n >= len(w.Images) {
+					if err != nil || n < 0 || n >= len(w.Photos) {
 						return nil, bad("That photo is no longer on this idea.")
 					}
-					images = append(images, w.Images[n])
-					size += imageBytes(w.Images[n])
+					entries = append(entries, entry{kept: w.Photos[n]})
+					size += w.Photos[n].Size
 					continue
 				}
-				data, _, err := decodeImage(p)
+				data, mime, err := decodeImage(p)
 				if err != nil {
 					return nil, err
 				}
 				size += len(data)
-				images = append(images, p)
+				uploaded += len(data)
+				entries = append(entries, entry{data: data, mime: mime})
 			}
-			if err := a.imageBudget(u, w.ID, size); err != nil {
+			if err := a.imageBudget(u, w.ID, size, uploaded); err != nil {
 				return nil, err
 			}
-			w.Images = images
+			photos := []Photo{}
+			for _, e := range entries {
+				if e.data == nil {
+					photos = append(photos, e.kept)
+					continue
+				}
+				p, err := a.storePhoto(e.data, e.mime)
+				if err != nil {
+					return nil, err
+				}
+				photos = append(photos, p)
+			}
+			w.Photos = photos
+			a.dropped = true
 		}
 		if index < 0 {
 			u.Wishes = append(u.Wishes, w)
+			a.wishOwner[w.ID] = u.ID
 		} else {
 			u.Wishes[index] = w
 		}
@@ -1317,6 +1435,7 @@ func (a *App) dispatch(w http.ResponseWriter, r *http.Request) (any, error) {
 			return nil, problem{404, "Gift idea not found."}
 		}
 		u.Wishes = slices.Delete(u.Wishes, index, index+1)
+		a.dropped = true
 		return a.publicUser(u), nil
 	}
 	if path == "join" && r.Method == "POST" {

@@ -2,8 +2,8 @@
 {$GIFTY_DOMAIN} {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000"
-	# fail2ban reads this log. Invitation codes and unsubscribe links are credentials that travel in the path, so
-	# they are blanked; cookies and authorization headers are already redacted by Caddy.
+	# fail2ban reads this log. Invitation codes, friend links and unsubscribe links are credentials that travel in
+	# the path, so they are blanked; cookies and authorization headers are already redacted by Caddy.
 	log {
 		output file /var/log/caddy/access.log {
 			roll_size 10MiB
@@ -12,7 +12,7 @@
 		format filter {
 			wrap json
 			fields {
-				request>uri regexp "(/api/(?:unsubscribe|invite))/[^?]+" "$1/REDACTED"
+				request>uri regexp "(/api/(?:unsubscribe|invite|friend|friend-link))/[^?]+" "$1/REDACTED"
 			}
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"mime"
 	"mime/quotedprintable"
 	"net"
+	"net/http"
 	"net/mail"
 	"net/smtp"
 	"net/url"
@@ -153,9 +154,16 @@ func (a *App) queue(u *User, notification bool, subject, body string) {
 	}
 }
 
-// accountMailAllowed caps confirmation and reset emails at 5 per person per
-// day and 100 an hour site-wide, so Gifty can't be used to flood an inbox.
-func (a *App) accountMailAllowed(u *User, now time.Time) bool {
+// Account emails (confirmations and resets) are capped at 5 per person per day, so Gifty can't be used to
+// flood an inbox, and at 10 per caller per 15 minutes, so one person can't spend the site's sending allowance on
+// throwaway accounts. The site-wide hourly ceiling is far above that and only there to protect the mail account;
+// reaching it is reported as a security event, since it means somebody is working around the other two.
+const (
+	maxAccountMailPerIP   = 10
+	maxAccountMailPerHour = 1000
+)
+
+func (a *App) accountMailAllowed(u *User, r *http.Request, now time.Time) bool {
 	if !a.mailOn() {
 		return false
 	}
@@ -165,16 +173,24 @@ func (a *App) accountMailAllowed(u *User, now time.Time) bool {
 	if now.Sub(a.hourStart) > time.Hour {
 		a.hourStart, a.hourCount = now, 0
 	}
-	if u.MailCount >= 5 || a.hourCount >= 100 {
-		log.Printf("account email to %s not sent: limit reached", u.Email)
+	if u.MailCount >= 5 {
+		log.Printf("account email to %s not sent: daily limit reached", u.Email)
+		return false
+	}
+	if !a.allow("mail|"+a.clientIP(r), maxAccountMailPerIP) {
+		a.sec(r, "mail_rate_limited")
+		return false
+	}
+	if a.hourCount >= maxAccountMailPerHour {
+		a.sec(r, "mail_site_limit")
 		return false
 	}
 	u.MailCount++
 	a.hourCount++
 	return true
 }
-func (a *App) sendVerify(u *User) bool {
-	if !a.accountMailAllowed(u, time.Now()) {
+func (a *App) sendVerify(u *User, r *http.Request) bool {
+	if !a.accountMailAllowed(u, r, time.Now()) {
 		return false
 	}
 	t := token()
@@ -182,8 +198,8 @@ func (a *App) sendVerify(u *User) bool {
 	a.queue(u, false, "Confirm your email address for Gifty", fmt.Sprintf("Hello %s,\n\nConfirm that this is your email address by opening this link:\n\n%s/#verify/%s\n\nThe link works for 48 hours. Gifty only sends exchange emails to confirmed addresses.\n\nIf you didn’t create a Gifty account, ignore this email.", u.Name, a.base, t))
 	return true
 }
-func (a *App) sendReset(u *User) bool {
-	if !a.accountMailAllowed(u, time.Now()) {
+func (a *App) sendReset(u *User, r *http.Request) bool {
+	if !a.accountMailAllowed(u, r, time.Now()) {
 		return false
 	}
 	t := token()

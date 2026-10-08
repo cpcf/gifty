@@ -80,6 +80,9 @@ func (a *App) kindExtras(v map[string]any, e *Exchange, u *User) {
 		}
 	case kindGroup:
 		f := a.state.Users[e.For]
+		if f == nil {
+			break // forgetUser removes a group gift with its person, so only a damaged data file gets here
+		}
 		out := map[string]any{"id": f.ID, "name": f.Name, "friends": areFriends(u, f)}
 		if areFriends(u, f) {
 			out["birthday"] = f.shown()

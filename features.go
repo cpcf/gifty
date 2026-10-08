@@ -385,8 +385,22 @@ func (a *App) serveCalendar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	// Built under the lock, sent after it, like the API.
+	out := &buffered{header: w.Header()}
+	func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		a.calendar(out, r)
+	}()
+	out.flush(w)
+}
+
+func (a *App) calendar(w http.ResponseWriter, r *http.Request) {
+	if !a.allow("read|"+a.clientIP(r), maxReads) {
+		a.sec(r, "read_rate_limited")
+		http.Error(w, "Too many requests. Try again in a few minutes.", 429)
+		return
+	}
 	u := a.user(r)
 	if u == nil {
 		http.Error(w, "Sign in to continue.", 401)

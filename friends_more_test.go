@@ -354,11 +354,11 @@ func TestIdeaLimitsAndEdits(t *testing.T) {
 	png := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 	ana.c.req("POST", "wishes", map[string]any{"id": id, "title": "Pan", "exchanges": []string{}, "friends": true, "photos": []string{png}}, 200)
 	ana.c.req("POST", "wishes", map[string]any{"id": id, "title": "Pan, 26cm", "exchanges": []string{}, "friends": true}, 200)
-	if w := a.state.Users[ana.id].Wishes[0]; len(w.Images) != 1 || w.Title != "Pan, 26cm" || !w.Friends {
+	if w := a.state.Users[ana.id].Wishes[0]; len(w.Photos) != 1 || w.Title != "Pan, 26cm" || !w.Friends {
 		t.Fatalf("edit lost data: %+v", w)
 	}
 	ana.c.req("POST", "wishes", map[string]any{"id": id, "title": "Pan", "exchanges": []string{}, "friends": true, "photos": []string{}}, 200)
-	if len(a.state.Users[ana.id].Wishes[0].Images) != 0 {
+	if len(a.state.Users[ana.id].Wishes[0].Photos) != 0 {
 		t.Fatal("photos weren't removed")
 	}
 	for i := 1; i < 100; i++ {

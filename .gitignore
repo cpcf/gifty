@@ -6,3 +6,4 @@
 /DESIGN.md
 /PRODUCT.md
 /.claude/
+/deploy/fail2ban/jail.d/gifty.local

@@ -25,6 +25,8 @@ install -d -o caddy -g caddy -m 755 /var/log/caddy
 command -v fail2ban-client >/dev/null || apt-get -o DPkg::Lock::Timeout=600 install -y fail2ban nftables
 install -m 644 fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
 install -m 644 fail2ban/jail.d/gifty.conf /etc/fail2ban/jail.d/
+# gifty.local holds the administrator's own addresses for ignoreip. It is kept out of git, so only copied when present.
+[ ! -e fail2ban/jail.d/gifty.local ] || install -m 644 fail2ban/jail.d/gifty.local /etc/fail2ban/jail.d/
 fail2ban-client -t
 systemctl daemon-reload
 systemctl enable --now gifty-backup.timer
