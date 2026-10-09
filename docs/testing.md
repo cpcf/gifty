@@ -9,6 +9,8 @@ tests/run-all.sh quick    # the same without the (slow) race detector
 
 `tests/run-all.sh fast` skips the browser suites (Go tests, vet, gofmt, syntax and unit tests only), and `tests/run-all.sh auto` runs `quick` when Playwright and axe are installed and otherwise `fast`, saying so. Set `FAIL_FAST=1` to stop at the first failure.
 
+The browser suites each get their own server on one of seven ports starting at `GIFTY_TEST_PORT_BASE` (default 8088, so 8088–8094). To run several copies at once, for example from separate worktrees, give each its own base: `GIFTY_TEST_PORT_BASE=9300 tests/run-all.sh`. If a port is already in use the run stops and says so, rather than letting a server left over from another run answer for the one under test; don't stop servers you didn't start, choose another base instead.
+
 ### Automatic runs
 
 - **Commit hook:** `tests/install-hooks.sh` points this clone at `.githooks/`, whose `pre-commit` runs `tests/run-all.sh auto` (with `FAIL_FAST`) when a commit touches code (`.go`, `web/`, `tests/`, `go.mod`, the hooks or the workflow) and skips docs-only commits. A failure stops the commit. `SKIP_TESTS=1 git commit ...` or `git commit --no-verify` skips it once. It tests the working tree, so unstaged changes are part of the run (it says so). Without Playwright it runs only the non-browser tests and prints a warning saying that. It leaves out the race detector, which takes a few minutes, so that stays for CI.
@@ -105,4 +107,4 @@ GIFTY_ADDR=127.0.0.1:8093 GIFTY_DATA=/tmp/gifty-browser/friends.json go run . &
 GIFTY_TEST_URL=http://127.0.0.1:8093 node tests/friends.cjs
 ```
 
-Each suite defaults to the port above (8088 to 8093); `GIFTY_TEST_URL` overrides it and `GIFTY_SCREENSHOTS` sets where screenshots go. Each suite signs up several accounts from one address, so restart its server between runs to reset the 30-attempt rate limit.
+Each suite defaults to the port above (8088 to 8093); `GIFTY_TEST_URL` overrides it and `GIFTY_SCREENSHOTS` sets where screenshots go (the browser, email, admin and gate suites otherwise use `gifty-browser` in the system temporary directory). If something else may be using these ports or files, pick other ports and a data directory of your own. Each suite signs up several accounts from one address, so restart its server between runs to reset the 30-attempt rate limit.

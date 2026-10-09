@@ -8,9 +8,14 @@
 #   tests/run-all.sh quick      # skips the race detector, which takes a few minutes
 #   tests/run-all.sh fast       # Go tests, checks and unit tests only: no browser suites
 #   tests/run-all.sh auto       # quick if Playwright is installed, otherwise fast, saying so (what the commit hook runs)
+# The browser suites listen on seven ports from GIFTY_TEST_PORT_BASE (default 8088, so 8088-8094). Give each copy its
+# own base to run several at once, e.g. GIFTY_TEST_PORT_BASE=9300. A port that is already in use stops the run rather
+# than letting another server answer for the one under test.
 set -u
 cd "$(dirname "$0")/.."
 mode=${1:-full}
+port_base=${GIFTY_TEST_PORT_BASE:-8088}
+case "$port_base" in ''|*[!0-9]*) echo "GIFTY_TEST_PORT_BASE must be a port number, not '$port_base'"; exit 2 ;; esac
 # Sensible defaults for the setup in docs/testing.md; set either variable yourself to override.
 [ -z "${NODE_PATH:-}" ] && [ -d /tmp/gifty-browser/node_modules ] && export NODE_PATH=/tmp/gifty-browser/node_modules
 [ -z "${GIFTY_CHROME:-}" ] && [ -x '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' ] && export GIFTY_CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -36,26 +41,40 @@ step "gofmt" sh -c 'test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }'
 step "syntax" sh -c 'for f in web/*.js tests/*.cjs; do node --check "$f" || exit 1; done'
 step "unit (friends.js date helpers, six time zones)" node tests/unit.cjs
 
-# serve NAME PORT [ENV=VALUE ...] starts a server on a fresh data file and waits for it.
+# serve NAME PORT [ENV=VALUE ...] starts a server on a fresh data file and waits for it. It refuses a port that is
+# already in use, and checks that the server answering is the one it started, not one left over from another run.
 serve() {
   name=$1; port=$2; shift 2
+  curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$port/"
+  if [ $? -ne 7 ]; then # 7: nothing listening
+    echo "port $port is already in use, so suite $name cannot have its own server there."
+    echo "Stop whatever is listening (lsof -nP -iTCP:$port -sTCP:LISTEN) or set GIFTY_TEST_PORT_BASE to a free range."
+    exit 1
+  fi
   env GIFTY_ADDR=127.0.0.1:$port GIFTY_DATA="$work/$name.json" "$@" "$work/gifty" >"$work/$name.log" 2>&1 &
-  pids="$pids $!"
-  i=0; while ! curl -sf "http://127.0.0.1:$port/api/config" >/dev/null; do i=$((i+1)); [ $i -gt 50 ] && { echo "server $name did not start"; cat "$work/$name.log"; exit 1; }; sleep 0.2; done
+  pid=$!
+  pids="$pids $pid"
+  i=0
+  while ! curl -sf "http://127.0.0.1:$port/api/config" >/dev/null; do
+    kill -0 "$pid" 2>/dev/null || { echo "server $name exited before answering"; cat "$work/$name.log"; exit 1; }
+    i=$((i+1)); [ $i -gt 50 ] && { echo "server $name did not start"; cat "$work/$name.log"; exit 1; }
+    sleep 0.2
+  done
+  kill -0 "$pid" 2>/dev/null || { echo "server $name exited, and something else answered on port $port"; cat "$work/$name.log"; exit 1; }
 }
-suite() { # suite NAME PORT [ENV=VALUE ...]
-  name=$1; port=$2; shift 2
+suite() { # suite NAME OFFSET [ENV=VALUE ...]: OFFSET is added to the port base
+  name=$1; port=$((port_base + $2)); shift 2
   serve "$name" "$port" "$@"
   step "browser: $name" env GIFTY_TEST_URL=http://127.0.0.1:$port GIFTY_MAIL_LOG="$work/$name.log" node tests/$name.cjs
 }
 if [ "$mode" != fast ]; then
-suite browser 8088
-suite email 8089 GIFTY_SMTP_HOST=log
-suite gate 8090 GIFTY_ACCESS_CODE='test gate code'
-suite admin 8091 GIFTY_SMTP_HOST=log GIFTY_ADMINS=boss@example.com
-suite features 8092
-suite friends 8093
-suite friends-more 8094
+suite browser 0
+suite email 1 GIFTY_SMTP_HOST=log
+suite gate 2 GIFTY_ACCESS_CODE='test gate code'
+suite admin 3 GIFTY_SMTP_HOST=log GIFTY_ADMINS=boss@example.com
+suite features 4
+suite friends 5
+suite friends-more 6
 fi
 
 if [ -n "$failed" ]; then printf '\nFAILED:%b\n' "$failed"; exit 1; fi

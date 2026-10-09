@@ -1,7 +1,7 @@
 // Access gate against a server started with GIFTY_ACCESS_CODE='test gate code'.
 // GIFTY_TEST_URL=http://127.0.0.1:8090 node tests/gate.cjs
 const {chromium}=require('playwright');const AxeBuilder=require('@axe-core/playwright').default;const assert=require('assert/strict');
-const fs=require('node:fs');const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8090',out=process.env.GIFTY_SCREENSHOTS||'/tmp/gifty-browser';fs.mkdirSync(out,{recursive:true});
+const fs=require('node:fs');const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8090',out=process.env.GIFTY_SCREENSHOTS||require('node:path').join(require('node:os').tmpdir(),'gifty-browser');fs.mkdirSync(out,{recursive:true});
 const audit=async p=>{await p.waitForTimeout(200);const r=await new AxeBuilder({page:p}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(r.violations.map(v=>v.id),[])};
 (async()=>{const b=await chromium.launch({...(process.env.GIFTY_CHROME?{executablePath:process.env.GIFTY_CHROME}:{}),headless:true});const errors=[];
 const p=await (await b.newContext({locale:process.env.GIFTY_LOCALE||'en-GB',viewport:{width:390,height:844}})).newPage();p.on('pageerror',e=>errors.push(e.message));

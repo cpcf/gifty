@@ -1,7 +1,7 @@
 // Admin page and account deletion against a server started with GIFTY_SMTP_HOST=log and GIFTY_ADMINS=boss@example.com.
 // GIFTY_TEST_URL=http://127.0.0.1:8091 GIFTY_MAIL_LOG=server.log node tests/admin.cjs
 const {chromium}=require('playwright');const AxeBuilder=require('@axe-core/playwright').default;const fs=require('fs');const assert=require('assert/strict');
-const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8091',out=process.env.GIFTY_SCREENSHOTS||'/tmp/gifty-browser',logf=process.env.GIFTY_MAIL_LOG;if(!logf)throw Error('Set GIFTY_MAIL_LOG to the server log file.');fs.mkdirSync(out,{recursive:true});
+const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8091',out=process.env.GIFTY_SCREENSHOTS||require('node:path').join(require('node:os').tmpdir(),'gifty-browser'),logf=process.env.GIFTY_MAIL_LOG;if(!logf)throw Error('Set GIFTY_MAIL_LOG to the server log file.');fs.mkdirSync(out,{recursive:true});
 const mails=()=>fs.readFileSync(logf,'utf8').replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
 const audit=async p=>{await p.waitForTimeout(200);const r=await new AxeBuilder({page:p}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(r.violations.map(v=>v.id+' '+v.nodes.map(n=>n.target).join()),[])};
 const pw='a long enough password';

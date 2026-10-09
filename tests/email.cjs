@@ -1,7 +1,7 @@
 // Email flows against a server started with GIFTY_SMTP_HOST=log, reading emails from its log.
 // GIFTY_TEST_URL=http://127.0.0.1:8089 GIFTY_MAIL_LOG=server.log node tests/email.cjs
 const {chromium}=require('playwright');const AxeBuilder=require('@axe-core/playwright').default;const fs=require('fs');const assert=require('assert/strict');
-const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8089',out=process.env.GIFTY_SCREENSHOTS||'/tmp/gifty-browser',logf=process.env.GIFTY_MAIL_LOG;if(!logf)throw Error('Set GIFTY_MAIL_LOG to the server log file.');fs.mkdirSync(out,{recursive:true});
+const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8089',out=process.env.GIFTY_SCREENSHOTS||require('node:path').join(require('node:os').tmpdir(),'gifty-browser'),logf=process.env.GIFTY_MAIL_LOG;if(!logf)throw Error('Set GIFTY_MAIL_LOG to the server log file.');fs.mkdirSync(out,{recursive:true});
 const mails=()=>fs.readFileSync(logf,'utf8').replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
 const tok=(to,route)=>{const all=mails().split('email to ').filter(m=>m.startsWith(to));const m=[...all.at(-1).matchAll(new RegExp('#'+route+'/([A-Za-z0-9_-]+)','g'))];assert(m.length,'no '+route+' link for '+to);return m.at(-1)[1]};
 const audit=async p=>{await p.waitForTimeout(200);const r=await new AxeBuilder({page:p}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(r.violations.map(v=>v.id+' '+v.nodes.map(n=>n.target).join()),[])};
