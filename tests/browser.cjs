@@ -2,7 +2,7 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const AxeBuilder=require('@axe-core/playwright').default;
 const fs=require('node:fs');
-const output=process.env.GIFTY_SCREENSHOTS||'/tmp/gifty-browser';
+const output=process.env.GIFTY_SCREENSHOTS||require('node:path').join(require('node:os').tmpdir(),'gifty-browser');
 fs.mkdirSync(output,{recursive:true});
 const base=process.env.GIFTY_TEST_URL||'http://127.0.0.1:8088';
 const audit=async p=>{await p.waitForTimeout(250);const result=await new AxeBuilder({page:p}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(result.violations.map(v=>({id:v.id,targets:v.nodes.map(n=>n.target)})),[])};
