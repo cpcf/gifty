@@ -36,6 +36,7 @@ type user struct {
 	FriendsIn      []string  `json:",omitempty"` // people who asked to be this person's friend
 	FriendsOut     []string  `json:",omitempty"` // people this person asked
 	FriendCode     string    `json:",omitempty"` // opening the friend link with it sends a request
+	Searchable     bool      `json:",omitempty"` // found by name or exact email in friend search; off unless chosen
 	NoBirthdayMail bool      `json:",omitempty"`
 	BirthdayMailed []string  `json:",omitempty"` // keys of birthday emails already queued
 }
@@ -66,7 +67,7 @@ func (a *application) publicUser(u *user) any {
 	for i, w := range u.Wishes {
 		wishes[i] = publicWish(w)
 	}
-	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]reminder{}, u.Reminders...), "admin": a.isAdmin(u), "birthday": u.Birthday, "birthdayHidden": u.BirthdayHidden, "birthdayMail": !u.NoBirthdayMail, "birthdayRecent": u.Birthday.recent(time.Now())}
+	return map[string]any{"id": u.ID, "name": u.Name, "email": u.Email, "wishes": wishes, "verified": u.Verified, "notify": !u.NoEmail, "ownReminders": u.OwnReminders, "reminders": append([]reminder{}, u.Reminders...), "admin": a.isAdmin(u), "birthday": u.Birthday, "birthdayHidden": u.BirthdayHidden, "birthdayMail": !u.NoBirthdayMail, "birthdayRecent": u.Birthday.recent(time.Now()), "searchable": u.Searchable}
 }
 
 // isAdmin needs a confirmed address, so nobody can become an administrator by signing up with an admin's email first.

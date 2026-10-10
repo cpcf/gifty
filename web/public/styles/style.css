@@ -448,6 +448,12 @@ button:active,.button:active{transform:translateY(1px)}
 nav.views{justify-content:flex-start}
 .invite .buttons .secondary+.secondary{margin-top:0}
 .panel h2{font-size:16px}
+.find input{font-size:16px}
+#find-results:not(:empty){margin-top:16px}
+#find-results p{margin:0}
+#find-results .hint{margin-top:8px}
+.find>.hint{margin-top:12px}
+.find>.hint a{color:inherit}
 
 /* A friend request, in the notice style. */
 .request{display:flex;justify-content:space-between;align-items:center;gap:12px 24px;flex-wrap:wrap;border:2px solid var(--ink)}

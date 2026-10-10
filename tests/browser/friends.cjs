@@ -508,10 +508,82 @@ const future = (days) => {
     "Dee can see a mark or the exchange",
   );
 
+  // 9. Search: nobody is found until they turn it on. Fay does, Gil finds her by name and by email address and
+  // asks from the result, and Fay accepts.
+  const fay = await signup("Fay"),
+    gil = await signup("Gil");
+  const find = async (p, q) => {
+    await p.getByLabel("Name or email address").fill(q);
+    await p.getByRole("button", { name: "Search", exact: true }).click();
+  };
+  await nav(gil, "Friends");
+  await gil.getByRole("link", { name: "People" }).click();
+  await gil.getByRole("heading", { name: "Find someone" }).waitFor();
+  await gil.getByText("You can’t be found this way yourself.").waitFor();
+  await find(gil, "f");
+  await gil.getByText("Use at least 2 characters.").waitFor();
+  await find(gil, "fay");
+  await gil.getByText("Nobody found for “fay”.").waitFor();
+  await audit(gil);
+  await nav(fay, "Account");
+  await fay.getByRole("heading", { name: "Friend search" }).waitFor();
+  assert.equal(
+    await fay.getByLabel("Let people find me in search").isChecked(),
+    false,
+    "search is on before anyone chose it",
+  );
+  await fay.getByLabel("Let people find me in search").check();
+  await fay.getByText("People can find you in search now.").waitFor();
+  await audit(fay);
+  await shot(fay, "account-searchable");
+  await find(gil, `fay${stamp}@example.com`);
+  await gil.locator("#find-results li", { hasText: "Fay" }).waitFor();
+  assert.doesNotMatch(
+    await gil.locator("#find-results").innerText(),
+    /@/,
+    "a result shows an email address",
+  );
+  await find(gil, "fa");
+  await gil.getByRole("button", { name: "Ask Fay to be friends" }).waitFor();
+  await audit(gil);
+  await shot(gil, "friends-search");
+  await gil.getByRole("button", { name: "Ask Fay to be friends" }).click();
+  await gil.getByText("Asked. You’ll be friends once they accept.").waitFor();
+  await gil
+    .locator("#find-results")
+    .getByText("Asked. Waiting for them.")
+    .waitFor();
+  await audit(gil);
+  await nav(fay, "Friends");
+  await fay.getByRole("link", { name: "People" }).click();
+  await fay.getByText("asked to be friends").waitFor();
+  await fay.getByRole("button", { name: "Accept" }).click();
+  await fay.getByRole("link", { name: "Gil", exact: true }).waitFor();
+  await gil.reload();
+  await gil.getByRole("link", { name: "Fay", exact: true }).waitFor();
+  {
+    const p = await open(360);
+    await p.goto(base);
+    await p.locator("header").getByRole("link", { name: "Sign in" }).click();
+    await p.getByLabel("Email address").fill(`gil${stamp}@example.com`);
+    await p
+      .getByLabel("Password", { exact: true })
+      .fill("a sufficiently long password");
+    await p.getByRole("button", { name: "Sign in", exact: true }).click();
+    await p.getByRole("heading", { name: "Exchanges", exact: true }).waitFor();
+    await p.goto(base + "/#friends/people");
+    await find(p, "fay");
+    await p.locator("#find-results").getByText("Already friends").waitFor();
+    await noOverflow(p, "search results at 360");
+    await audit(p);
+    await shot(p, "friends-search-360");
+    await p.close();
+  }
+
   assert.deepEqual(errors, [], "uncaught script errors");
   await browser.close();
   console.log(
-    "PASS: friends, birthdays, calendar, wish list audiences, marking ideas, white elephant, group gift, accessibility, phone layouts, no JS errors",
+    "PASS: friends, search, birthdays, calendar, wish list audiences, marking ideas, white elephant, group gift, accessibility, phone layouts, no JS errors",
   );
 })().catch((e) => {
   console.error(e);

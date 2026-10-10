@@ -20,7 +20,7 @@ Status: implemented (see the end of this page for what changed in the build). Mo
 
 ## Decisions I made (say if any is wrong)
 
-- **Adding friends is by link, never by search.** There is no directory of accounts and no lookup by email. This matches "invitations are shared by hand" and the invite-only mode. The link opener sends a request and you accept, because a forwarded link must not hand over your list.
+- **Adding friends is by link, never by search.** There is no directory of accounts and no lookup by email. This matches "invitations are shared by hand" and the invite-only mode. The link opener sends a request and you accept, because a forwarded link must not hand over your list. (Changed since: a person can now turn on being found by search from their account page. It is off by default, and a search result can only send the same request. See `docs/security.md`.)
 - **The friend link does not get anyone past the access code.** An exchange invite does; a friend link is permanent until replaced, so it should not.
 - **Friends is its own nav item** with two views, Calendar and People. Nav becomes Exchanges, Friends, Wish list, Account. It still fits at 340px with the existing wrapping.
 - **Year of birth is optional.** With it, friends see "Turns 34". Without it, they never see an age. Feb 29 shows on 28 Feb in common years.

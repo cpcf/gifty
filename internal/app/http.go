@@ -129,6 +129,10 @@ func isLookup(path string) bool {
 	return strings.HasPrefix(path, "invite/") || strings.HasPrefix(path, "friend-link/") || strings.HasPrefix(path, "friend/")
 }
 
+// readOnly is a POST that changes nothing, so it skips the snapshot and the save. Friend search is one so that
+// the name or address being looked for travels in the body, not in a URL that a proxy would log.
+func readOnly(path string) bool { return path == "friends/search" }
+
 // serveLocked is the part of serveAPI that runs under the state lock.
 func (a *application) serveLocked(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
@@ -144,12 +148,13 @@ func (a *application) serveLocked(w http.ResponseWriter, r *http.Request) {
 	}
 	// Roll back all in-memory changes when persistence fails. Reads change nothing, so only writes pay for a snapshot.
 	var before []byte
-	if r.Method == "POST" {
+	write := r.Method == "POST" && !readOnly(path)
+	if write {
 		before, _ = json.Marshal(a.state)
 		a.dropped = false
 	}
 	result, err := a.dispatch(w, r)
-	if err == nil && r.Method == "POST" {
+	if err == nil && write {
 		err = a.save()
 		if err != nil {
 			var restored stateData

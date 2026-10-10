@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -454,4 +455,111 @@ func TestFriendPhotos(t *testing.T) {
 	if status(ben, shown) != 200 || status(ben, hidden) != 404 || status(cy, shown) != 404 || status(ana, hidden) != 200 {
 		t.Fatal("photos aren't limited to the audience chosen for the idea")
 	}
+}
+
+func TestFriendSearch(t *testing.T) {
+	a := setup(t)
+	p := people(t, a, "Ana", "Ben", "Cy", "Anabel")
+	ana, ben, cy, anabel := p["Ana"], p["Ben"], p["Cy"], p["Anabel"]
+	a.state.Users[ana.id].Name = "Ana Lopez"
+	search := func(x *person, q string) []any {
+		return x.c.req("POST", "friends/search", map[string]string{"Query": q}, 200)["people"].([]any)
+	}
+	names := func(found []any) string {
+		out := []string{}
+		for _, f := range found {
+			out = append(out, f.(map[string]any)["name"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	anaEmail := a.state.Users[ana.id].Email
+
+	// Nobody is searchable until they choose to be, by name or by address.
+	if ana.c.req("GET", "me", nil, 200)["searchable"] != false {
+		t.Fatal("a new account is searchable")
+	}
+	if got := names(search(ben, "ana")) + names(search(ben, anaEmail)); got != "" {
+		t.Fatalf("found people who never opted in: %q", got)
+	}
+	ben.c.req("POST", "friends/ask", map[string]string{"ID": ana.id}, 404)
+
+	if ana.c.req("POST", "account/searchable", map[string]bool{"Searchable": true}, 200)["searchable"] != true {
+		t.Fatal("searchable was not saved")
+	}
+	// Word starts match, in any case; the middle of a word and part of an address don't. Anabel still hasn't opted in.
+	for q, want := range map[string]string{"ana": "Ana Lopez", "LOP": "Ana Lopez", " ana  lo ": "Ana Lopez", "na": "", "opez": "", anaEmail: "Ana Lopez", strings.ToUpper(anaEmail): "Ana Lopez", anaEmail[1:]: "", "@example.com": ""} {
+		if got := names(search(ben, q)); got != want {
+			t.Errorf("search %q found %q, want %q", q, got, want)
+		}
+	}
+	if got := names(search(ana, "ana")); got != "" {
+		t.Errorf("search found the searcher: %q", got)
+	}
+	ben.c.req("POST", "friends/search", map[string]string{"Query": "a"}, 400)
+	// A result is a name and an id, and nothing else.
+	r := search(ben, "ana")[0].(map[string]any)
+	if len(r) != 2 || r["id"] != ana.id {
+		t.Fatalf("result = %v", r)
+	}
+
+	// Asking from a result sends an ordinary request, once.
+	ben.c.req("POST", "friends/ask", map[string]string{"ID": ana.id}, 200)
+	ben.c.req("POST", "friends/ask", map[string]string{"ID": ana.id}, 200)
+	if got := a.state.Users[ana.id].FriendsIn; len(got) != 1 || got[0] != ben.id {
+		t.Fatalf("requests waiting = %v", got)
+	}
+	ben.c.req("POST", "friends/ask", map[string]string{"ID": ben.id}, 404)
+	// Ana can answer Ben from her side even though he isn't searchable, and that settles it.
+	ana.c.req("POST", "friends/ask", map[string]string{"ID": ben.id}, 200)
+	if !areFriends(a.state.Users[ana.id], a.state.Users[ben.id]) {
+		t.Fatal("asking someone who asked first should make them friends")
+	}
+
+	// Turning it off takes you out of results and stops new requests by id.
+	ana.c.req("POST", "account/searchable", map[string]bool{"Searchable": false}, 200)
+	if got := names(search(cy, "ana")); got != "" {
+		t.Errorf("found after opting out: %q", got)
+	}
+	cy.c.req("POST", "friends/ask", map[string]string{"ID": ana.id}, 404)
+
+	// Results are capped and say when there are more.
+	anabel.c.req("POST", "account/searchable", map[string]bool{"Searchable": true}, 200)
+	for i := 0; i < maxFound+1; i++ {
+		id := fmt.Sprintf("filler%02d", i)
+		a.state.Users[id] = &user{ID: id, Name: fmt.Sprintf("Anders %02d", i), Searchable: true}
+	}
+	out := cy.c.req("POST", "friends/search", map[string]string{"Query": "an"}, 200)
+	if got := out["people"].([]any); len(got) != maxFound || out["more"] != true || got[0].(map[string]any)["name"] != "Anabel" {
+		t.Errorf("capped search = %d results, more %v, first %v", len(got), out["more"], got[0])
+	}
+}
+
+func TestFriendSearchLimits(t *testing.T) {
+	a, _ := mailSetup(t)
+	p := people(t, a, "Ana", "Ben")
+	ana, ben := p["Ana"], p["Ben"]
+	ana.c.req("POST", "account/searchable", map[string]bool{"Searchable": true}, 200)
+	email := a.state.Users[ana.id].Email
+	find := func() int {
+		return len(ben.c.req("POST", "friends/search", map[string]string{"Query": email}, 200)["people"].([]any))
+	}
+	// With email on, an address finds its account only once confirmed, so a squatter can't be found as its owner.
+	a.state.Users[ana.id].Verified = false
+	if find() != 0 {
+		t.Fatal("an unconfirmed address was found by email")
+	}
+	a.state.Users[ana.id].Verified = true
+	if find() != 1 {
+		t.Fatal("a confirmed address was not found by email")
+	}
+	// Searching doesn't write the data file, and each person gets a budget of searches.
+	before, _ := os.Stat(a.path)
+	for i := 2; i < maxSearches; i++ {
+		find()
+	}
+	if after, _ := os.Stat(a.path); !after.ModTime().Equal(before.ModTime()) {
+		t.Error("a search saved the data file")
+	}
+	ben.c.req("POST", "friends/search", map[string]string{"Query": email}, 429)
+	ana.c.req("POST", "friends/search", map[string]string{"Query": "ben"}, 200)
 }

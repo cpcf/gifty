@@ -31,6 +31,9 @@ let shownWishes = [];
 
 let friendPageData = null;
 
+// The last search on the People page, kept so the results survive asking someone.
+let found = null;
+
 async function loadFriends() {
   friendsData = await api("friends");
   if (!friendsData.code) friendsData = await api("friends/rotate", {});
@@ -144,7 +147,51 @@ async function friendsPeople(version) {
       .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name));
   header("friends");
   $("#main").innerHTML =
-    `${friendsHead("people")}<div class="detail"><div class="detail-main">${d.requests.map((r) => `<div class="notice request" role="status"><p><strong class="wrap">${esc(r.name)}</strong> asked to be friends. You would see each other’s birthdays and lists.</p><div class="buttons"><button type="button" data-action="friend-accept" data-id="${esc(r.id)}">Accept</button><button type="button" class="secondary" data-action="friend-decline" data-id="${esc(r.id)}">Not now</button></div></div>`).join("")}${d.sent.length ? `<p class="muted">${d.sent.map((s) => `You asked <strong class="wrap">${esc(s.name)}</strong>. <button type="button" class="quiet" data-action="friend-cancel" data-id="${esc(s.id)}" aria-label="Cancel your request to ${esc(s.name)}">Cancel</button>`).join("<br>")}</p>` : ""}${rows.length ? `<div class="grid-head"><h2>Your friends</h2><span class="muted num">${rows.length}</span></div><table class="exchanges"><thead><tr><th scope="col">Name</th><th scope="col">Birthday</th><th scope="col">Next</th><th scope="col">List</th></tr></thead><tbody>${rows.map((f) => `<tr><td><a href="#friends/${esc(f.id)}" class="wrap">${esc(f.name)}</a></td><td data-label="Birthday">${f.birthday ? birthdayText(f.birthday) : '<span class="muted">Not shared</span>'}</td><td data-label="Next">${f.birthday ? inDays(daysBetween(today, f.at)) : "–"}</td><td data-label="List">${f.ideas ? plural(f.ideas, "idea", "ideas") : "No ideas yet"}</td></tr>`).join("")}</tbody></table>` : '<section class="empty sheet"><h2>No friends yet</h2><p>Send your friend link. When someone opens it and you accept, you can see each other’s birthdays and lists.</p></section>'}</div><aside><section class="sheet invite"><h2>Your friend link</h2><p>Send this to someone. When they open it they can ask to be friends, and you choose whether to accept.</p><label for="friend-link" class="visually-hidden">Friend link</label><input id="friend-link" readonly value="${esc(link)}"><div class="buttons"><button type="button" class="secondary" data-action="copy-friend">Copy link</button>${navigator.share ? '<button type="button" class="secondary" data-action="share-friend">Share</button>' : ""}</div><button type="button" class="quiet" data-action="rotate-friend" aria-describedby="friend-rotate-hint">Replace link</button><p class="hint" id="friend-rotate-hint">Replacing it stops the old link working. Friends you already have stay.</p></section></aside></div>`;
+    `${friendsHead("people")}<div class="detail"><div class="detail-main">${d.requests.map((r) => `<div class="notice request" role="status"><p><strong class="wrap">${esc(r.name)}</strong> asked to be friends. You would see each other’s birthdays and lists.</p><div class="buttons"><button type="button" data-action="friend-accept" data-id="${esc(r.id)}">Accept</button><button type="button" class="secondary" data-action="friend-decline" data-id="${esc(r.id)}">Not now</button></div></div>`).join("")}${d.sent.length ? `<p class="muted">${d.sent.map((s) => `You asked <strong class="wrap">${esc(s.name)}</strong>. <button type="button" class="quiet" data-action="friend-cancel" data-id="${esc(s.id)}" aria-label="Cancel your request to ${esc(s.name)}">Cancel</button>`).join("<br>")}</p>` : ""}${rows.length ? `<div class="grid-head"><h2>Your friends</h2><span class="muted num">${rows.length}</span></div><table class="exchanges"><thead><tr><th scope="col">Name</th><th scope="col">Birthday</th><th scope="col">Next</th><th scope="col">List</th></tr></thead><tbody>${rows.map((f) => `<tr><td><a href="#friends/${esc(f.id)}" class="wrap">${esc(f.name)}</a></td><td data-label="Birthday">${f.birthday ? birthdayText(f.birthday) : '<span class="muted">Not shared</span>'}</td><td data-label="Next">${f.birthday ? inDays(daysBetween(today, f.at)) : "–"}</td><td data-label="List">${f.ideas ? plural(f.ideas, "idea", "ideas") : "No ideas yet"}</td></tr>`).join("")}</tbody></table>` : '<section class="empty sheet"><h2>No friends yet</h2><p>Send your friend link. When someone opens it and you accept, you can see each other’s birthdays and lists.</p></section>'}</div><aside><section class="sheet invite"><h2>Your friend link</h2><p>Send this to someone. When they open it they can ask to be friends, and you choose whether to accept.</p><label for="friend-link" class="visually-hidden">Friend link</label><input id="friend-link" readonly value="${esc(link)}"><div class="buttons"><button type="button" class="secondary" data-action="copy-friend">Copy link</button>${navigator.share ? '<button type="button" class="secondary" data-action="share-friend">Share</button>' : ""}</div><button type="button" class="quiet" data-action="rotate-friend" aria-describedby="friend-rotate-hint">Replace link</button><p class="hint" id="friend-rotate-hint">Replacing it stops the old link working. Friends you already have stay.</p></section>${findHTML()}</aside></div>`;
+}
+
+// People page: search for people who have chosen to be found, and ask them from the results.
+function findHTML() {
+  if (found && found.user !== state.user.id) found = null;
+  return `<section class="sheet find"><h2>Find someone</h2><p>Search for people who’ve chosen to be found. Anyone else needs your friend link.</p><form data-ff="friend-search">${errorBox()}<div class="field"><label for="find-q">Name or email address</label><input id="find-q" name="q" required minlength="2" maxlength="254" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(found?.q || "")}"></div><button class="secondary">Search</button></form><div id="find-results" aria-live="polite">${foundHTML()}</div>${state.user.searchable ? "" : '<p class="hint">You can’t be found this way yourself. <a href="#account">Change that on your account page</a>.</p>'}</section>`;
+}
+
+// How each person found stands with you is read from the friends data, so it stays right after a request changes.
+function foundHTML() {
+  if (!found) return "";
+  if (!found.people.length)
+    return `<p class="muted">Nobody found for “${esc(found.q)}”. They might not have turned search on, so send them your friend link.</p>`;
+  const has = (list, id) => list.some((x) => x.id === id),
+    d = friendsData,
+    twins = found.people.some((p, i) =>
+      found.people.some((o, j) => i !== j && o.name === p.name),
+    );
+  return `<ul class="who-list">${found.people
+    .map((p) => {
+      const n = esc(p.name),
+        id = esc(p.id);
+      let note = "",
+        act = `<button type="button" class="quiet" data-action="friend-ask" data-id="${id}" aria-label="Ask ${n} to be friends">Ask to be friends</button>`;
+      if (has(d.friends, p.id)) {
+        note = "Already friends";
+        act = `<a class="button quiet" href="#friends/${id}" aria-label="${n}’s list">Their list</a>`;
+      } else if (has(d.sent, p.id)) {
+        note = "Asked. Waiting for them.";
+        act = "";
+      } else if (has(d.requests, p.id)) {
+        note = "Asked you";
+        act = `<button type="button" class="quiet" data-action="friend-ask" data-id="${id}" aria-label="Accept ${n}">Accept</button>`;
+      }
+      return `<li><div><b class="wrap">${n}</b>${note ? `<small>${note}</small>` : ""}</div>${act}</li>`;
+    })
+    .join(
+      "",
+    )}</ul>${found.more ? '<p class="hint">Showing the first 10. Type more of the name to narrow it down.</p>' : ""}${twins ? '<p class="hint">Some of these share a name. Search for the email address to be sure who you’re asking.</p>' : ""}`;
+}
+
+// Account page: whether you turn up in other people's searches.
+function searchableHTML() {
+  return `<section class="sheet" id="searchable"><h2>Friend search</h2><label class="check"><input type="checkbox" name="searchable" ${state.user.searchable ? "checked" : ""}><span>Let people find me in search<span class="hint">Allows other users to find your account with the built in search and send you friend requests.</span></span></label></section>`;
 }
 
 // On the exchanges page: friends whose birthday is within two weeks.
@@ -295,6 +342,13 @@ function initFriends() {
           notify("Asked. You’ll be friends once they accept.");
           break;
         }
+        case "friend-search": {
+          const q = data.q.trim();
+          const r = await api("friends/search", { query: q });
+          found = { ...r, q, user: state.user.id };
+          $("#find-results").innerHTML = foundHTML();
+          break;
+        }
         case "friend-remove":
           await api("friends/remove", { id: form.dataset.id });
           $("#dialog").close();
@@ -341,6 +395,31 @@ function initFriends() {
         }
       }
     });
+  });
+
+  document.addEventListener("change", async (event) => {
+    const box = event.target.closest('input[name="searchable"]');
+    if (!box) return;
+    if (saving.has("searchable")) {
+      box.checked = !box.checked;
+      return;
+    }
+    saving.add("searchable");
+    try {
+      state.user = await api("account/searchable", {
+        searchable: box.checked,
+      });
+      notify(
+        box.checked
+          ? "People can find you in search now."
+          : "You’re out of search. Requests you already have stay.",
+      );
+    } catch (err) {
+      box.checked = !box.checked;
+      notify(err.message);
+    } finally {
+      saving.delete("searchable");
+    }
   });
 
   // Arrow keys move between days, so the grid is one tab stop instead of thirty-five.
@@ -411,6 +490,23 @@ function initFriends() {
                 : action === "friend-decline"
                   ? "Request declined. They aren’t told."
                   : "Request cancelled.",
+            );
+          } finally {
+            saving.delete(action);
+          }
+          break;
+        }
+        case "friend-ask": {
+          if (saving.has(action)) break;
+          saving.add(action);
+          try {
+            const id = b.dataset.id;
+            friendsData = await api("friends/ask", { id });
+            await route();
+            notify(
+              friendsData.friends.some((f) => f.id === id)
+                ? "You’re friends now."
+                : "Asked. You’ll be friends once they accept.",
             );
           } finally {
             saving.delete(action);
@@ -516,6 +612,7 @@ export {
   groupSection,
   getShownWishes,
   birthdayHTML,
+  searchableHTML,
   friendLinkSignedOut,
   friendsPeople,
   friendPage,

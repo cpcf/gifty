@@ -1,7 +1,7 @@
 import { header } from "../ui/navigation.js";
 import { $, esc } from "../ui/dom.js";
 import { state } from "../core/session.js";
-import { birthdayHTML } from "./friends.js";
+import { birthdayHTML, searchableHTML } from "./friends.js";
 import { accountRemindersHTML } from "./reminders.js";
 import { api } from "../core/api.js";
 import { plural, statusTag } from "../ui/format.js";
@@ -13,7 +13,7 @@ import { modal } from "../ui/dialog.js";
 function account() {
   header("account");
   $("#main").innerHTML =
-    `<div class="narrow form-page"><h1>Account</h1><dl class="facts stacked"><div><dt class="label">Name</dt><dd class="wrap">${esc(state.user.name)}</dd></div><div><dt class="label">Email</dt><dd class="wrap">${esc(state.user.email)}</dd></div></dl>${birthdayHTML()}${state.mailOn ? `<section class="sheet"><h2>Emails</h2>` + `${state.user.verified ? "" : '<p>Your email address isn’t confirmed yet. Gifty only sends exchange emails to confirmed addresses, so open the link in the confirmation email.</p><p><button class="secondary" data-action="resend-verify">Send the link again</button></p>'}<label class="check"><input type="checkbox" name="notify" ${state.user.notify ? "checked" : ""}><span>Email me about my exchanges<span class="hint">When entries close, and reminders before the exchange date. Emails never say who you’re buying for.</span></span></label><label class="check"><input type="checkbox" name="birthday-mail" ${state.user.birthdayMail ? "checked" : ""}><span>Email me about friends’ birthdays<span class="hint">A week before, and on the day. The email never says what anyone is getting.</span></span></label>${accountRemindersHTML()}</section>` : ""}<div class="after"><button class="secondary" data-action="logout">Sign out</button> <button class="quiet" data-action="delete-account">Delete account</button></div></div>`;
+    `<div class="narrow form-page"><h1>Account</h1><dl class="facts stacked"><div><dt class="label">Name</dt><dd class="wrap">${esc(state.user.name)}</dd></div><div><dt class="label">Email</dt><dd class="wrap">${esc(state.user.email)}</dd></div></dl>${birthdayHTML()}${searchableHTML()}${state.mailOn ? `<section class="sheet"><h2>Emails</h2>` + `${state.user.verified ? "" : '<p>Your email address isn’t confirmed yet. Gifty only sends exchange emails to confirmed addresses, so open the link in the confirmation email.</p><p><button class="secondary" data-action="resend-verify">Send the link again</button></p>'}<label class="check"><input type="checkbox" name="notify" ${state.user.notify ? "checked" : ""}><span>Email me about my exchanges<span class="hint">When entries close, and reminders before the exchange date. Emails never say who you’re buying for.</span></span></label><label class="check"><input type="checkbox" name="birthday-mail" ${state.user.birthdayMail ? "checked" : ""}><span>Email me about friends’ birthdays<span class="hint">A week before, and on the day. The email never says what anyone is getting.</span></span></label>${accountRemindersHTML()}</section>` : ""}<div class="after"><button class="secondary" data-action="logout">Sign out</button> <button class="quiet" data-action="delete-account">Delete account</button></div></div>`;
 }
 
 async function adminPage(version) {

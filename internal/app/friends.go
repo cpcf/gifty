@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"net/http"
 	"slices"
@@ -186,6 +187,91 @@ func (a *application) byCode(code string) *user {
 	return nil
 }
 
+// ask sends t a friend request from u. Asking someone who already asked settles it, and asking twice changes nothing.
+func ask(u, t *user) error {
+	switch {
+	case areFriends(u, t) || slices.Contains(t.FriendsIn, u.ID):
+	case slices.Contains(u.FriendsIn, t.ID):
+		if len(u.Friends) >= maxFriends || len(t.Friends) >= maxFriends {
+			return bad("Friend lists hold up to 200 people.")
+		}
+		befriend(u, t)
+	default:
+		if len(u.FriendsOut) >= maxRequests || len(t.FriendsIn) >= 2*maxRequests || len(u.Friends) >= maxFriends || len(t.Friends) >= maxFriends {
+			return bad("You can’t send another request right now.")
+		}
+		t.FriendsIn = append(t.FriendsIn, u.ID)
+		u.FriendsOut = append(u.FriendsOut, t.ID)
+	}
+	return nil
+}
+
+const (
+	maxSearches = 30 // per person per 15 minutes
+	maxFound    = 10
+)
+
+// matches is whether q finds v: the start of any word of the name, or the whole email address. Matching word
+// starts and never part of an address keeps a search from being a way to list everyone or to guess at addresses.
+// With email on, an address only finds its owner once confirmed, so nobody can sign up with someone else's
+// address and be found as them.
+func (a *application) matches(v *user, q string) bool {
+	if strings.Contains(q, "@") {
+		return v.Email == q && (v.Verified || !a.mailOn())
+	}
+	name := strings.ToLower(v.Name)
+	if strings.HasPrefix(name, q) {
+		return true
+	}
+	for _, w := range strings.Fields(name) {
+		if strings.HasPrefix(w, q) {
+			return true
+		}
+	}
+	return false
+}
+
+// searchPeople finds people who chose to be searchable. Each is sent as a name and an id, never an email
+// address, and a search for an address that isn't there looks the same as one for a person who isn't searchable.
+func (a *application) searchPeople(u *user, r *http.Request) (any, error) {
+	var in struct{ Query string }
+	if err := readJSON(r, &in); err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(strings.Join(strings.Fields(in.Query), " "))
+	if len([]rune(q)) < 2 || len(q) > 254 {
+		return nil, bad("Enter at least two letters of a name, or a whole email address.")
+	}
+	if !a.allow("search|"+u.ID, maxSearches) {
+		a.sec(r, "search_rate_limited")
+		return nil, problem{429, "That’s a lot of searches. Try again in a few minutes."}
+	}
+	found := []*user{}
+	for _, v := range a.state.Users {
+		if v.Searchable && v.ID != u.ID && a.matches(v, q) {
+			found = append(found, v)
+		}
+	}
+	slices.SortFunc(found, func(x, y *user) int {
+		return cmp.Or(strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name)), strings.Compare(x.ID, y.ID))
+	})
+	more := len(found) > maxFound
+	ids := []string{}
+	for _, v := range found[:min(len(found), maxFound)] {
+		ids = append(ids, v.ID)
+	}
+	return map[string]any{"people": a.people(ids), "more": more}, nil
+}
+
+func (a *application) handleSearchable(u *user, r *http.Request) (any, error) {
+	var in struct{ Searchable bool }
+	if err := readJSON(r, &in); err != nil {
+		return nil, err
+	}
+	u.Searchable = in.Searchable
+	return a.publicUser(u), nil
+}
+
 // friendsAPI serves /api/friends and everything under it.
 func (a *application) friendsAPI(u *user, parts []string, r *http.Request) (any, error) {
 	if len(parts) == 0 && r.Method == "GET" {
@@ -208,17 +294,25 @@ func (a *application) friendsAPI(u *user, parts []string, r *http.Request) (any,
 			if t.ID == u.ID {
 				return nil, bad("That’s your own friend link.")
 			}
-			switch {
-			case areFriends(u, t) || slices.Contains(t.FriendsIn, u.ID):
-			case slices.Contains(u.FriendsIn, t.ID):
-				// They already asked, so opening their link as well settles it.
-				befriend(u, t)
-			default:
-				if len(u.FriendsOut) >= maxRequests || len(t.FriendsIn) >= 2*maxRequests || len(u.Friends) >= maxFriends || len(t.Friends) >= maxFriends {
-					return nil, bad("You can’t send another request right now.")
-				}
-				t.FriendsIn = append(t.FriendsIn, u.ID)
-				u.FriendsOut = append(u.FriendsOut, t.ID)
+			if err := ask(u, t); err != nil {
+				return nil, err
+			}
+			return a.friendsView(u), nil
+		case "search":
+			return a.searchPeople(u, r)
+		case "ask":
+			var in struct{ ID string }
+			if err := readJSON(r, &in); err != nil {
+				return nil, err
+			}
+			// Only someone who chose to be found can be asked this way, or someone who asked first. Otherwise
+			// knowing an id, which exchange members do, would be enough to send a request.
+			t := a.state.Users[in.ID]
+			if t == nil || t.ID == u.ID || !(t.Searchable || slices.Contains(u.FriendsIn, t.ID) || areFriends(u, t)) {
+				return nil, problem{404, "Person not found."}
+			}
+			if err := ask(u, t); err != nil {
+				return nil, err
 			}
 			return a.friendsView(u), nil
 		case "accept", "decline", "cancel", "remove":

@@ -68,6 +68,9 @@ func (a *application) dispatch(w http.ResponseWriter, r *http.Request) (any, err
 	if path == "account/birthday-mail" && r.Method == "POST" {
 		return a.handleBirthdayMail(u, r)
 	}
+	if path == "account/searchable" && r.Method == "POST" {
+		return a.handleSearchable(u, r)
+	}
 	if path == "friends" || strings.HasPrefix(path, "friends/") {
 		return a.friendsAPI(u, strings.FieldsFunc(strings.TrimPrefix(strings.TrimPrefix(path, "friends"), "/"), func(r rune) bool { return r == '/' }), r)
 	}
