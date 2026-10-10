@@ -23,11 +23,11 @@ That is, in turn:
 go test -race ./...
 go vet ./...
 gofmt -l .
-node --check web/*.js tests/*.cjs
-node tests/unit.cjs
+tests/check-syntax.sh
+node tests/unit/birthday-dates.mjs
 ```
 
-Statement coverage is about 88% (`go test -cover ./...`). The tests cover:
+Statement coverage was about 88% before the structural refactor (`go test -cover ./...`). Go tests live beside their implementation in `internal/app/`, grouped by behaviour; reusable account, HTTP, friendship and mail fixtures live in `test_helpers_test.go`. Browser scenarios live in `tests/browser/`, with setup, signup and axe helpers in `tests/support/browser.cjs`. The syntax check discovers nested modules and tests. The tests cover:
 
 - access control and privacy between members and outsiders
 - draws over 3–100 people
@@ -47,21 +47,22 @@ Statement coverage is about 88% (`go test -cover ./...`). The tests cover:
 - friend, request and waiting limits; cancelling and declining only your own requests; claiming an idea you hold after it was sorted; friends-only ideas and their photos staying from givers (and a giver's claim ending when an idea is kept from givers, while a friend's survives a change of exchanges)
 - group gifts through their life (edit can't change who it is for, removing and leaving, archiving), white elephants through theirs (leaving and removal before and after entries close, a deleted account keeping its place, reminders that stop when the gift is ready)
 - ideas: limits, validation, edits that keep what wasn't sent; friends, birthdays and kinds surviving a restart; a data file from before any of this still loading
+- nested public modules and legacy asset URLs, content types, shared security headers, HEAD and ETag revalidation, and refusing private source/test paths
 - keeping pairs apart (feasibility, tight rules, 100 people, pruning, one pair per person, organiser-only), anonymous messages (privacy between members, limits, email only when a conversation changes hands), claims and sorted ideas (never shown to the owner, cleaned up with accounts and exchanges), reveal day and the calendar file
 
 ## Browser
 
-Eight suites drive Chrome with Playwright. Each runs axe (WCAG 2 A/AA and 2.1 AA) on the pages it visits and fails on any uncaught script error.
+Seven suites drive Chrome with Playwright. Each runs axe (WCAG 2 A/AA and 2.1 AA) on the pages it visits and fails on any uncaught script error.
 
-- `tests/browser.cjs`: signup, invitations, closing entries with three people, each person drawing a name, the covered ticket and its keyboard reveal (no name in the page while covered), wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px with no horizontal overflow.
-- `tests/email.cjs`: confirmation, account settings, the draw-a-name email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It needs a server with `GIFTY_SMTP_HOST=log`.
-- `tests/admin.cjs`: the admin page (hidden until the admin address is confirmed, and from everyone else), removing an account, and deleting your own account with a wrong and a right password. It needs a server with `GIFTY_SMTP_HOST=log`, `GIFTY_ADMINS=boss@example.com` and a fresh data file.
-- `tests/features.cjs`: four people, keep apart, anonymous messages with focus handling, claiming and sorting ideas, the calendar file and reveal day, with axe on each state and a phone-width check. It needs a fresh data file and no mail; the exchange is dated today so the reveal is available.
-- `tests/friends.cjs`: four people (and a fifth arriving through a signed-out friend link) becoming friends, a birthday on the calendar (desktop, 390px and 320px, no overflow, day buttons at least 44px), the three idea audiences, marking an idea (focus after marking, other friends see it taken, the owner's page contains no trace), a white elephant from creation to each person drawing a number, and a group gift that the person it is for can't join or see. It needs a fresh data file and no mail.
-- `tests/friends-more.cjs`: what the first friends suite doesn't reach. Four birthdays on one day (three chips and "+1 more" on desktop, three stripes on a phone, everyone named in words), a 29 February birthday on 28 February in a plain year and 29 February in a leap one, year labels on the month buttons at the end of December, arrow keys across a month end, declining and cancelling requests, putting an idea down (the holder is told, others stop seeing it, putting it back), changing who sees an idea (marks end), removing a friend (cancel, confirm, marks released, the page gone), replacing the friend link, hiding and removing a birthday and the form's mistakes, the birthdays-soon notice, the kind picker with no friends, editing a white elephant's steals, a group gift's invitation preview and leaving it, and every new page and endpoint signed out. It needs a fresh data file and no mail.
-- `tests/gate.cjs`: the invite-only page in place of both signup and sign-in, refusal of direct API signups and logins, wrong and right codes, invited guests getting past the code, and security headers. It needs a server with an access code set.
+- `tests/browser/browser.cjs`: signup, invitations, closing entries with three people, each person drawing a name, the covered ticket and its keyboard reveal (no name in the page while covered), wish lists, sign-out and sign-in, at 1440, 390, 375 and 320px with no horizontal overflow.
+- `tests/browser/email.cjs`: confirmation, account settings, the draw-a-name email (which must not name a recipient), reminder editing, keyboard focus after saving, wish scoping, unsubscribe and password reset. It needs a server with `GIFTY_SMTP_HOST=log`.
+- `tests/browser/admin.cjs`: the admin page (hidden until the admin address is confirmed, and from everyone else), removing an account, and deleting your own account with a wrong and a right password. It needs a server with `GIFTY_SMTP_HOST=log`, `GIFTY_ADMINS=boss@example.com` and a fresh data file.
+- `tests/browser/features.cjs`: four people, keep apart, anonymous messages with focus handling, claiming and sorting ideas, the calendar file, reveal day and a delayed response racing newer navigation (including title and focus), with axe on each state and a phone-width check. It needs a fresh data file and no mail; the exchange is dated today so the reveal is available.
+- `tests/browser/friends.cjs`: four people (and a fifth arriving through a signed-out friend link) becoming friends, a birthday on the calendar (desktop, 390px and 320px, no overflow, day buttons at least 44px), the three idea audiences, marking an idea (focus after marking, other friends see it taken, the owner's page contains no trace), a white elephant from creation to each person drawing a number, and a group gift that the person it is for can't join or see. It needs a fresh data file and no mail.
+- `tests/browser/friends-more.cjs`: what the first friends suite doesn't reach. Four birthdays on one day (three chips and "+1 more" on desktop, three stripes on a phone, everyone named in words), a 29 February birthday on 28 February in a plain year and 29 February in a leap one, year labels on the month buttons at the end of December, arrow keys across a month end, declining and cancelling requests, putting an idea down (the holder is told, others stop seeing it, putting it back), changing who sees an idea (marks end), removing a friend (cancel, confirm, marks released, the page gone), replacing the friend link, hiding and removing a birthday and the form's mistakes, the birthdays-soon notice, the kind picker with no friends, editing a white elephant's steals, a group gift's invitation preview and leaving it, and every new page and endpoint signed out. It needs a fresh data file and no mail.
+- `tests/browser/gate.cjs`: the invite-only page in place of both signup and sign-in, refusal of direct API signups and logins, wrong and right codes, invited guests getting past the code, and security headers. It needs a server with an access code set.
 
-`tests/unit.cjs` runs the pure date and wording helpers in `web/friends.js` (leap years, the next birthday, counting days, ordinals, UTC formatting) in six time zones, including ones a day either side of UTC, with no browser or server. It was checked by breaking the code on purpose and seeing it fail.
+`tests/unit/birthday-dates.mjs` runs the pure date and wording helpers directly imported from `web/public/features/birthday-dates.js` (leap years, the next birthday, counting days, ordinals, UTC formatting) in six time zones, including ones a day either side of UTC, with no browser or server. It was checked by breaking the code on purpose and seeing it fail.
 
 Automated accessibility checks are evidence, not a certification; no screen-reader testing has been done.
 
@@ -89,22 +90,22 @@ Start a separate server for each suite, then run it:
 
 ```sh
 GIFTY_ADDR=127.0.0.1:8088 GIFTY_DATA=/tmp/gifty-browser/browser.json go run . &
-GIFTY_TEST_URL=http://127.0.0.1:8088 node tests/browser.cjs
+GIFTY_TEST_URL=http://127.0.0.1:8088 node tests/browser/browser.cjs
 
 GIFTY_ADDR=127.0.0.1:8089 GIFTY_SMTP_HOST=log GIFTY_DATA=/tmp/gifty-browser/mail.json go run . > /tmp/gifty-browser/mail.log 2>&1 &
-GIFTY_TEST_URL=http://127.0.0.1:8089 GIFTY_MAIL_LOG=/tmp/gifty-browser/mail.log node tests/email.cjs
+GIFTY_TEST_URL=http://127.0.0.1:8089 GIFTY_MAIL_LOG=/tmp/gifty-browser/mail.log node tests/browser/email.cjs
 
 GIFTY_ADDR=127.0.0.1:8090 GIFTY_ACCESS_CODE='test gate code' GIFTY_DATA=/tmp/gifty-browser/gate.json go run . &
-GIFTY_TEST_URL=http://127.0.0.1:8090 node tests/gate.cjs
+GIFTY_TEST_URL=http://127.0.0.1:8090 node tests/browser/gate.cjs
 
 GIFTY_ADDR=127.0.0.1:8091 GIFTY_SMTP_HOST=log GIFTY_ADMINS=boss@example.com GIFTY_DATA=/tmp/gifty-browser/admin.json go run . > /tmp/gifty-browser/admin.log 2>&1 &
-GIFTY_TEST_URL=http://127.0.0.1:8091 GIFTY_MAIL_LOG=/tmp/gifty-browser/admin.log node tests/admin.cjs
+GIFTY_TEST_URL=http://127.0.0.1:8091 GIFTY_MAIL_LOG=/tmp/gifty-browser/admin.log node tests/browser/admin.cjs
 
 GIFTY_ADDR=127.0.0.1:8092 GIFTY_DATA=/tmp/gifty-browser/features.json go run . &
-GIFTY_TEST_URL=http://127.0.0.1:8092 node tests/features.cjs
+GIFTY_TEST_URL=http://127.0.0.1:8092 node tests/browser/features.cjs
 
 GIFTY_ADDR=127.0.0.1:8093 GIFTY_DATA=/tmp/gifty-browser/friends.json go run . &
-GIFTY_TEST_URL=http://127.0.0.1:8093 node tests/friends.cjs
+GIFTY_TEST_URL=http://127.0.0.1:8093 node tests/browser/friends.cjs
 ```
 
 Each suite defaults to the port above (8088 to 8093); `GIFTY_TEST_URL` overrides it and `GIFTY_SCREENSHOTS` sets where screenshots go (the browser, email, admin and gate suites otherwise use `gifty-browser` in the system temporary directory). If something else may be using these ports or files, pick other ports and a data directory of your own. Each suite signs up several accounts from one address, so restart its server between runs to reset the 30-attempt rate limit.
