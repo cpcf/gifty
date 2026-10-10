@@ -87,15 +87,17 @@ Passwords use salted PBKDF2-HMAC-SHA256 with 600,000 iterations. Session tokens 
 ```sh
 go test -race ./...
 go vet ./...
-node --check web/app.js
+tests/check-syntax.sh
 ```
 
-The Go tests cover access control, draws over 3–100 participants, invitations, wish ownership and scoping, validation, cross-origin rejection, persistence, storage-failure rollback, email, reminders, the access gate and abuse limits. Browser suites in `tests/` drive Chrome with Playwright and axe; [docs/testing.md](docs/testing.md) says how to run them.
+The Go tests cover access control, draws over 3–100 participants, invitations, wish ownership and scoping, validation, cross-origin rejection, persistence, storage-failure rollback, email, reminders, the access gate and abuse limits. Browser suites in `tests/browser/` drive Chrome with Playwright and axe; [docs/testing.md](docs/testing.md) says how to run them.
+
+The responsibility boundaries and locking rules are described in [docs/architecture.md](docs/architecture.md).
 
 ## Design
 
-[docs/surface.md](docs/surface.md) describes the design direction and each screen. The interface uses Public Sans (SIL Open Font License, `web/public-sans-OFL.txt`), served from the binary. No external requests, trackers, raster images or production JavaScript dependencies are loaded.
+[docs/surface.md](docs/surface.md) describes the design direction and each screen. The interface uses Public Sans (SIL Open Font License, `web/public/assets/public-sans-OFL.txt`), served from the binary. No external requests, trackers, raster images or production JavaScript dependencies are loaded.
 
 ## Licence
 
-MIT; see [LICENSE](LICENSE). Public Sans keeps its own licence (`web/public-sans-OFL.txt`).
+MIT; see [LICENSE](LICENSE). Public Sans keeps its own licence (`web/public/assets/public-sans-OFL.txt`).

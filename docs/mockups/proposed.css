@@ -1,5 +1,5 @@
-/* Proposed additions to web/style.css for friends, birthdays and the calendar. Flat colour, no shadows, ink the only filled button. */
-@font-face{font-family:"Public Sans";src:url(../../web/public-sans.woff2) format("woff2");font-weight:100 900;font-style:normal}
+/* Proposed additions to web/public/styles/style.css for friends, birthdays and the calendar. Flat colour, no shadows, ink the only filled button. */
+@font-face{font-family:"Public Sans";src:url(../../web/public/assets/public-sans.woff2) format("woff2");font-weight:100 900;font-style:normal}
 
 /* Views switch: plain links styled like the main nav; the current one is underlined in ink. */
 .views{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin:0 0 24px}

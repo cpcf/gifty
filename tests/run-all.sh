@@ -38,8 +38,8 @@ go build -o "$work/gifty" . || exit 1
 if [ "$mode" = full ]; then step "go test -race" go test -race ./...; else step "go test" go test ./...; fi
 step "go vet" go vet ./...
 step "gofmt" sh -c 'test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }'
-step "syntax" sh -c 'for f in web/*.js tests/*.cjs; do node --check "$f" || exit 1; done'
-step "unit (friends.js date helpers, six time zones)" node tests/unit.cjs
+step "syntax" tests/check-syntax.sh
+step "unit (birthday/date helpers, six time zones)" node tests/unit/birthday-dates.mjs
 
 # serve NAME PORT [ENV=VALUE ...] starts a server on a fresh data file and waits for it. It refuses a port that is
 # already in use, and checks that the server answering is the one it started, not one left over from another run.
@@ -65,7 +65,7 @@ serve() {
 suite() { # suite NAME OFFSET [ENV=VALUE ...]: OFFSET is added to the port base
   name=$1; port=$((port_base + $2)); shift 2
   serve "$name" "$port" "$@"
-  step "browser: $name" env GIFTY_TEST_URL=http://127.0.0.1:$port GIFTY_MAIL_LOG="$work/$name.log" node tests/$name.cjs
+  step "browser: $name" env GIFTY_TEST_URL=http://127.0.0.1:$port GIFTY_MAIL_LOG="$work/$name.log" node tests/browser/$name.cjs
 }
 if [ "$mode" != fast ]; then
 suite browser 0

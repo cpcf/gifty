@@ -1,6 +1,6 @@
 # Design: friends, birthdays, shared lists, exchange kinds
 
-Status: implemented (see the end of this page for what changed in the build). Mockups are in `docs/mockups/` and use the real `web/style.css` plus `proposed.css` (the new components). Open any of them in a browser; resize to see the phone layout.
+Status: implemented (see the end of this page for what changed in the build). Mockups are in `docs/mockups/` and use the real `web/public/styles/style.css` plus `proposed.css` (the new components). Open any of them in a browser; resize to see the phone layout.
 
 | Mockup | Shows |
 | --- | --- |
