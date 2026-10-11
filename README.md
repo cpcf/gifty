@@ -94,10 +94,6 @@ The Go tests cover access control, draws over 3–100 participants, invitations,
 
 The responsibility boundaries and locking rules are described in [docs/architecture.md](docs/architecture.md).
 
-## Design
-
-[docs/surface.md](docs/surface.md) describes the design direction and each screen. The interface uses Public Sans (SIL Open Font License, `web/public/assets/public-sans-OFL.txt`), served from the binary. No external requests, trackers, raster images or production JavaScript dependencies are loaded.
-
 ## Licence
 
 MIT; see [LICENSE](LICENSE). Public Sans keeps its own licence (`web/public/assets/public-sans-OFL.txt`).

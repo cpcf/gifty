@@ -264,7 +264,7 @@ func (a *application) handleSaveWish(u *user, r *http.Request) (any, error) {
 			uploaded += len(data)
 			entries = append(entries, entry{data: data, mime: mime})
 		}
-		if err := a.imageBudget(u, w.ID, size, uploaded); err != nil {
+		if err := a.imageBudget(r, u, w.ID, size, uploaded); err != nil {
 			return nil, err
 		}
 		photos := []photo{}

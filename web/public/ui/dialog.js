@@ -2,16 +2,17 @@ import { clearToast, notify } from "./toast.js";
 import { $, esc } from "./dom.js";
 import { errorBox } from "./forms.js";
 
+// modal takes its title as plain text and its content as HTML.
 function modal(title, content) {
   clearToast();
   $("#dialog").innerHTML =
-    `<h2 id="dialog-title">${title}</h2>${content}<button class="quiet close" data-action="close">Close</button>`;
+    `<h2 id="dialog-title">${esc(title)}</h2>${content}<button class="quiet close" data-action="close">Close</button>`;
   $("#dialog").showModal();
 }
 
 function confirmAction(title, body, action, id = "") {
   modal(
-    esc(title),
+    title,
     `<p>${esc(body)}</p><form data-form="confirm" data-operation="${action}" data-id="${id}">${errorBox()}<div class="dialog-actions"><button type="button" class="secondary" data-action="close" autofocus>Cancel</button><button>${esc(title.replace(/\?$/, ""))}</button></div></form>`,
   );
 }

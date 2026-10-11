@@ -115,12 +115,16 @@ func (a *application) details(r *http.Request, e *exchange, u *user, create bool
 	if strings.Trim(b[0], "0") == "" {
 		return bad("The budget must be at least 1.")
 	}
+	// The kind's own checks come before anything is stored, so a refused edit changes nothing.
+	if err := a.kindDetails(e, u, create, in.Kind, in.Steals, in.For); err != nil {
+		return err
+	}
 	e.Name = in.Name
 	e.Date = in.Date
 	e.Budget = in.Budget
 	e.Currency = in.Currency
 	e.Note = strings.TrimSpace(in.Note)
-	return a.kindDetails(e, u, create, in.Kind, in.Steals, in.For)
+	return nil
 }
 
 // dropMember takes someone out of an exchange that hasn't drawn yet, along with any pair they were in.
@@ -216,6 +220,7 @@ func (a *application) handleCreateExchange(u *user, r *http.Request) (any, error
 		}
 	}
 	if len(a.state.Exchanges) >= maxExchanges {
+		a.sec(r, "site_full_exchanges")
 		return nil, problem{503, "Gifty isn’t taking new exchanges right now."}
 	}
 	if active >= 20 {

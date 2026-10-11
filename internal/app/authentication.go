@@ -50,8 +50,15 @@ func (a *application) mac(s string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// unsubToken is the unsubscribe credential in u's emails. It is derived, so it isn't stored anywhere.
-func (a *application) unsubToken(u *user) string { return a.mac("gifty-unsub:" + u.ID) }
+// unsubToken is the unsubscribe credential in u's emails. It is derived, so it isn't stored anywhere. Turning
+// emails back on gives the account an UnsubNonce, which retires every link sent before; accounts that never
+// have keep the links they were first sent.
+func (a *application) unsubToken(u *user) string {
+	if u.UnsubNonce == "" {
+		return a.mac("gifty-unsub:" + u.ID)
+	}
+	return a.mac("gifty-unsub:" + u.ID + ":" + u.UnsubNonce)
+}
 
 // same compares two secrets in constant time.
 func same(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
@@ -298,6 +305,7 @@ func (a *application) handleCredentials(w http.ResponseWriter, r *http.Request, 
 			return nil, bad("Try again.")
 		}
 		if len(a.state.Users) >= maxUsers {
+			a.sec(r, "site_full_accounts")
 			return nil, problem{503, "Gifty isn’t taking new accounts right now."}
 		}
 		found = &user{ID: token(), Name: in.Name, Email: in.Email, Salt: pre.salt, Hash: pre.hash, Wishes: []wish{}, FriendCode: token()}

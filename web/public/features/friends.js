@@ -516,7 +516,7 @@ function initFriends() {
         case "friend-remove": {
           const name = friendPageData?.name || "this person";
           modal(
-            esc(`Remove ${name} as a friend?`),
+            `Remove ${name} as a friend?`,
             `<p>You’ll stop seeing each other’s birthdays and lists, and anything either of you had marked on the other’s list is released. Nobody is sent a message. You can be friends again later.</p><form data-ff="friend-remove" data-id="${esc(b.dataset.id)}">${errorBox()}<div class="dialog-actions"><button type="button" class="secondary" data-action="close" autofocus>Cancel</button><button>Remove friend</button></div></form>`,
           );
           break;

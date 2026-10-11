@@ -210,7 +210,7 @@ function initPhotos() {
               alt = (i) =>
                 `${w.title}${n > 1 ? `, photo ${i + 1} of ${n}` : ""}`;
             modal(
-              esc(w.title),
+              w.title,
               `<div class="gallery"><img class="photo-full" src="${esc(w.images[0])}" alt="${esc(alt(0))}">${n > 1 ? `<div class="photo-thumbs" role="group" aria-label="Photos">${w.images.map((u, i) => `<button type="button" class="photo-thumb" data-action="show-photo" data-src="${esc(u)}" data-alt="${esc(alt(i))}" aria-pressed="${i === 0}" aria-label="Show photo ${i + 1} of ${n}"><img src="${esc(u)}" alt=""></button>`).join("")}</div>` : ""}</div>`,
             );
           }

@@ -154,7 +154,7 @@ function initWishes() {
         case "sort-wish": {
           const w = state.user.wishes.find((w) => w.id === b.dataset.id);
           modal(
-            esc(`Take ${w?.title || "this idea"} off your list?`),
+            `Take ${w?.title || "this idea"} off your list?`,
             `<p>Whoever is buying for you won’t see it any more. You can put it back later.</p>${errorBox()}<div class="dialog-actions"><button type="button" class="secondary" data-action="close" autofocus>Cancel</button><button type="button" data-action="wish-status" data-id="${esc(b.dataset.id)}" data-status="dropped">I don’t want it any more</button><button type="button" data-action="wish-status" data-id="${esc(b.dataset.id)}" data-status="got">I’ve got it</button></div>`,
           );
           break;

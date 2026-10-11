@@ -83,6 +83,9 @@ func TestPhotoBudgets(t *testing.T) {
 	idea(ana, "One", map[string]any{"photos": []string{dataURI("image/png", testPNG)}})
 	// The site is out of room for new photos, but a photo already stored can be reused.
 	ana.c.req("POST", "wishes", map[string]any{"title": "Two", "exchanges": []string{}, "photos": []string{dataURI("image/png", png2)}}, 507)
+	if a.watch.events["site_full_photos"] != 1 {
+		t.Fatalf("a full photo store should be a security event: %v", a.watch.events)
+	}
 	maxPhotoTotal = 1 << 30
 	maxImageTotal = len(testPNG) + len(png2) - 1
 	ana.c.req("POST", "wishes", map[string]any{"title": "Two", "exchanges": []string{}, "photos": []string{dataURI("image/png", png2)}}, 400)

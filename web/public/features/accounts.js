@@ -67,14 +67,14 @@ function initAccounts() {
         case "admin-delete-user": {
           const u = adminData.users.find((u) => u.id === b.dataset.id);
           modal(
-            esc(`Delete ${u.name}?`),
+            `Delete ${u.name}?`,
             `<p>${esc(u.email)} will be removed with their wish list. If they are in a drawn exchange they stay on it as an empty “Deleted account”.</p><form data-form="admin-confirm" data-kind="users" data-id="${esc(u.id)}">${errorBox()}<div class="dialog-actions"><button type="button" class="secondary" data-action="close" autofocus>Cancel</button><button>Delete account</button></div></form>`,
           );
           break;
         }
         case "admin-delete-exchange":
           modal(
-            esc(`Delete ${b.dataset.name}?`),
+            `Delete ${b.dataset.name}?`,
             `<p>The exchange, its people list and any draw are removed for everyone. This can’t be undone.</p><form data-form="admin-confirm" data-kind="exchanges" data-id="${esc(b.dataset.id)}">${errorBox()}<div class="dialog-actions"><button type="button" class="secondary" data-action="close" autofocus>Cancel</button><button>Delete exchange</button></div></form>`,
           );
           break;

@@ -233,7 +233,7 @@ func decodeImage(s string) ([]byte, string, error) {
 // imageBudget refuses photos that would push u past the per-person total, or the site past its own. wishBytes
 // is the size of all of wishID's photos after the change, which replace its stored ones; uploaded is the size
 // of the photos being added.
-func (a *application) imageBudget(u *user, wishID string, wishBytes, uploaded int) error {
+func (a *application) imageBudget(r *http.Request, u *user, wishID string, wishBytes, uploaded int) error {
 	total := wishBytes
 	for _, w := range u.Wishes {
 		if w.ID != wishID {
@@ -246,7 +246,7 @@ func (a *application) imageBudget(u *user, wishID string, wishBytes, uploaded in
 		return bad(fmt.Sprintf("Your photos add up to more than %d MB. Remove some from an older idea first.", maxImageTotal>>20))
 	}
 	if uploaded > 0 && a.photoBytes+uploaded > maxPhotoTotal {
-		log.Print("photo refused: the site's photo storage is full")
+		a.sec(r, "site_full_photos")
 		return problem{507, "Gifty has run out of room for photos. Save the idea without one for now."}
 	}
 	return nil

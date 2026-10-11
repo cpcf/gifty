@@ -21,6 +21,7 @@ type user struct {
 	ResetHash     string    `json:",omitempty"`
 	ResetExpires  time.Time `json:",omitzero"`
 	NoEmail       bool      `json:",omitempty"`
+	UnsubNonce    string    `json:",omitempty"` // see unsubToken
 	// OwnReminders means Reminders replaces each organiser's default in every exchange.
 	OwnReminders bool       `json:",omitempty"`
 	Reminders    []reminder `json:",omitempty"`
@@ -78,13 +79,14 @@ const deletedName = "Deleted account"
 // removeUser deletes an account. People in drawn exchanges stay on as an empty
 // "Deleted account" so everyone else's draw still adds up; otherwise the record goes.
 func (a *application) removeUser(u *user) error {
-	a.dropped = true
-	a.forgetUser(u.ID)
+	// Refuse before anything is changed: an error doesn't undo what the handler already did.
 	for _, e := range a.state.Exchanges {
 		if e.Owner == u.ID && !e.Archived && len(e.Members) > 1 {
 			return bad("You organise “" + e.Name + "” with other people in it. Archive it first.")
 		}
 	}
+	a.dropped = true
+	a.forgetUser(u.ID)
 	kept := false
 	for id, e := range a.state.Exchanges {
 		if !slices.Contains(e.Members, u.ID) {
@@ -162,6 +164,10 @@ func (a *application) handleAccountMail(u *user, r *http.Request) (any, error) {
 	var in struct{ Notify bool }
 	if err := readJSON(r, &in); err != nil {
 		return nil, err
+	}
+	if u.NoEmail && in.Notify {
+		// Whatever turned them off, an unsubscribe link in someone else's hands can't do it again.
+		u.UnsubNonce = token()
 	}
 	u.NoEmail = !in.Notify
 	return a.publicUser(u), nil
